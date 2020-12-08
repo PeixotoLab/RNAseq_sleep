@@ -1,0 +1,315 @@
+---
+title: Quantification of snRNA-seq data after sleep deprivation with salmon 
+author: Davide Risso
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Many thanks to Stephanie Hicks for providing code and advice on how to run salmon on single-nucleus data.
+
+```{r}
+library(here)
+```
+
+We create a folder to store reference files (e.g. genome and cDNA) and quantification files (quantified counts) from salmon.  
+
+```{r}
+if(!dir.exists(here("salmon_files"))){
+  dir.create(here("salmon_files"))
+}
+
+if(!dir.exists(here("salmon_quants"))){
+  dir.create(here("salmon_quants"))
+}
+```
+
+# Quantification 
+
+## Download files needed for salmon
+
+We need to download 3 files:
+
+1. `GRCm38.primary_assembly.genome.fa.gz` - nucleotide (DNA) sequences of the **GRCH38 primary genome assembly** (chromosomes and scaffolds -- i.e. unplaced scaffolds?)
+2. `gencode.vM24.transcripts.fa.gz` - nucleotide (DNA) sequences of **all transcripts** on reference chromosomes
+3. `gencode.vM24.annotation.gtf.gz` - gene annotation on the reference chromosomes (i.e. for humans, these are chromosomes 1 to 22, X, and Y), i.e. locations of genes and other information about the genes, gene structure
+  * Gene transfer format (GTF) is a file format used to hold information about gene structure. It is a tab-delimited text format based on the general feature format (GFF), but contains some additional conventions specific to gene information.
+
+Source: https://www.gencodegenes.org/human/
+
+```{r}
+# download GENCODE primary assembly fasta file
+if(!file.exists(here("salmon_files", "GRCm38.primary_assembly.genome.fa.gz"))){
+  tar_gz_file <- "ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M24/GRCm38.primary_assembly.genome.fa.gz"
+  download.file(tar_gz_file, 
+                destfile = here("salmon_files", "GRCm38.primary_assembly.genome.fa.gz"), 
+                method = "wget")
+}
+
+# download GENCODE transcripts fasta file
+if(!file.exists(here("salmon_files", "gencode.vM24.transcripts.fa.gz"))){
+  tar_gz_file <- "ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M24/gencode.vM24.transcripts.fa.gz"
+  download.file(tar_gz_file, 
+                destfile = here("salmon_files", "gencode.vM24.transcripts.fa.gz"), 
+                method = "wget")
+}
+
+# download GENCODE gtf file
+if(!file.exists(here("salmon_files", "gencode.vM24.annotation.gtf.gz"))){
+  tar_gz_file <- "ftp://ftp.ebi.ac.uk/pub/databases/gencode/Gencode_mouse/release_M24/gencode.vM24.annotation.gtf.gz"
+  download.file(tar_gz_file, 
+                destfile = here("salmon_files", "gencode.vM24.annotation.gtf.gz"), 
+                method = "wget")
+}
+```
+
+
+## Make pre-mRNA files for salmon
+
+We need to create a set of pre-mRNA sequences to save to a FASTA file. 
+This is needed because we have single nucleus RNA-seq data so we need to take into account the pre-mRNA and mRNA transcripts. 
+This code kindly comes from [Charlotte Soneson](https://csoneson.github.io).
+
+```{r}
+suppressPackageStartupMessages({
+  library(Biostrings)
+  library(rtracklayer)
+  library(GenomicFeatures)
+  library(BSgenome)
+})
+```
+
+### Combined GTF file
+
+First, make a pre-mRNA GTF file (using the mRNA GTF file). Then combine it with the mRNA GTF file to get a GTF file for both pre-mRNA and mRNA.
+
+```{r}
+## Read gtf file and group exons by transcript
+ingtf <- here("salmon_files","gencode.vM24.annotation.gtf.gz")
+txdb <- GenomicFeatures::makeTxDbFromGFF(ingtf)
+grl <- GenomicFeatures::exonsBy(txdb, by = "tx", use.names = TRUE)
+
+## Create the pre-mRNA coordinates by adding all introns to each transcript
+grrange <- unlist(range(grl)) # 142552 rows
+names(grrange) <- paste(names(grrange), "premrna", sep= ".")
+
+## Save pre-mRNA gtf file
+premrna_gtf <- here("salmon_files","gencode.vM24.premrnaannotation.gtf")
+rtracklayer::export(grrange, premrna_gtf)
+
+## Combine two gtf files (pre-mRNA and mRNA) to be used in tximeta a bit later
+unlist(grl) # 842873 rows
+tmp <- c(grrange, unlist(grl)) # 985425 rows, pre-mRNA comes in front of mRNA
+
+## example of a transcript with three exons (mRNA) or entire pre-mRNA region
+tmp[grep("ENSMUST00000161581.1", names(tmp)),]
+
+## Save combined pre-mRNA and mRNA gtf file
+preandmrna_gtf <- here("salmon_files","gencode.vM24.preandmrnaannotation.gtf")
+rtracklayer::export(tmp, preandmrna_gtf)
+```
+
+### Combined FASTA file
+
+Now, for each entry in `grrange`, we extract the sequence from the corresponding `seqnames` entry in the `genome`.
+
+**Note**: If you use Ensembl, there will be a discrepancy between the transcripts (e.g. ENST00000456328 vs ENST00000456328.1). 
+Technically, it doesn't matter this point, but it will when we merge with the spliced (mRNA) transcripts.
+So, if you do this, you will likely need to remove the version numbers before merging the pre-mRNA and mRNA fasta files. 
+Or just use the Gencode annotation where the naming is consistent between the transcriptome fasta and the gtf.
+
+```{r}
+## Get genomic (DNA) sequence from FASTA file
+genomefasta <- here("salmon_files", "GRCm38.primary_assembly.genome.fa.gz")
+
+## Import FASTA file (DNA) with Biostrings::readDNAStringSet
+genome <- Biostrings::readDNAStringSet(genomefasta)
+names(genome) <- sapply(strsplit(names(genome), " "), .subset, 1) # creates chr1, etc
+
+## Get the sequence of each pre-mRNA molecule
+premrnaseq <- BSgenome::getSeq(x = genome, names = grrange)
+
+## Save pre-mRNA sequences to fasta file 
+premrna_fasta <- here("salmon_files", "GRCm38.premRNA.fa")
+Biostrings::writeXStringSet(premrnaseq, filepath = premrna_fasta)
+```
+
+Let's check to make sure the pre-mRNA and the mRNA have the same number of transcripts.
+
+```{bash}
+cd salmon_files
+zcat gencode.vM24.transcripts.fa.gz | grep ">"  | wc -l # mRNA
+grep ">" GRCm38.premRNA.fa | wc -l                     # pre-mRNA
+```
+
+Both have the same number of rows (or transcripts): 227462
+
+Now we will put the pre-mRNA (`GRCm38.premRNA.fa`) and mRNA (`gencode.vM24.transcripts.fa.gz`) fasta GENCODE files together. 
+
+```{bash}
+cd salmon_files
+zcat gencode.vM24.transcripts.fa.gz > gencode.vM24.transcripts.fa
+cat gencode.vM24.transcripts.fa GRCm38.premRNA.fa > gencode.vM24.preandmrna.fa
+grep ">" gencode.vM24.preandmrna.fa | wc -l
+```
+
+Ok there are 285104 (or = 142552*2) transcripts, as we expect. Now let's zip this file up. 
+This takes a while (~30-40 mins). 
+
+```{bash}
+cd salmon_files
+gzip gencode.vM24.preandmrna.fa
+```
+
+And clean up our space
+
+```{bash}
+cd salmon_files
+rm gencode.vM24.transcripts.fa
+rm GRCm38.primary_assembly.genome.fa.gz
+```
+
+We have made a GTF file (`gencode.vM24.preandmrnaaannotation.gtf`) and a FASTA file (`gencode.vM24.preandmrna.fa`) for the combined pre-mRNA and mRNA.
+
+## Build salmon index 
+
+The `-t` argument is the input transcripts file. 
+The `-i` argument is the index file to create. 
+The `--keepDuplicates` argument forces all duplicate transcripts (for example, multiple unspliced transcript of the same gene that are identical for example) that appear in the input will be retained and quantified separately. 
+If you keep the duplicates they will be assigned identical expression levels since salmon can’t tell them apart. 
+When you aggregate on the gene level, this will not make a difference any more. 
+Therefore, I do not keep the duplicates as we are interested in gene level aggregation. 
+The `--gencode` flag will handle the composite fasta headers in GENCODE transcript fasta files and  split the transcript name at the first '|' character. 
+The `--threads` argument says how many threads to use when building the index. 
+
+```{bash}
+salmon index -t salmon_files/gencode.vM24.preandmrna.fa.gz -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA --gencode --threads 20
+```
+
+We also build an index with only the mRNA transcripts.
+
+```{bash}
+salmon index -t salmon_files/gencode.vM24.transcripts.fa.gz -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNAonly --gencode --threads 20
+```
+
+And with only the pre-mRNA transcripts.
+
+```{bash}
+salmon index -t salmon_files/GRCm38.premRNA.fa.gz -i salmon_files/gencode.vM24_salmon-index-v1.0.0-premRNA --gencode --threads 20
+```
+
+
+## Create transcript-gene map
+
+Alevin needs a transcript-gene map, we can create one starting from the ENSEMBL transcript IDs.
+
+```{r}
+ingtf <- here("salmon_files","gencode.vM24.annotation.gtf.gz")
+txdb <- GenomicFeatures::makeTxDbFromGFF(ingtf)
+tx <- transcripts(txdb, columns=c("tx_name", "gene_id"))
+txdf <- as.data.frame(mcols(tx))
+txdf2 <- txdf
+txdf2$tx_name <- paste0(txdf2$tx_name, ".premrna")
+txdfall <- rbind(txdf, txdf2)
+write.table(txdfall, row.names = FALSE, quote = FALSE, col.names = FALSE,
+            file = here("salmon_files", "tx_gene_map.tsv"),
+            sep = "\t")
+```
+
+We do the same with mRNA only.
+
+```{r}
+ingtf <- here("salmon_files","gencode.vM24.annotation.gtf.gz")
+txdb <- GenomicFeatures::makeTxDbFromGFF(ingtf)
+tx <- transcripts(txdb, columns=c("tx_name", "gene_id"))
+txdf <- as.data.frame(mcols(tx))
+write.table(txdf, row.names = FALSE, quote = FALSE, col.names = FALSE,
+            file = here("salmon_files", "tx_gene_map_mrna.tsv"),
+            sep = "\t")
+```
+
+And with pre-mRNA only.
+
+```{r}
+ingtf <- here("salmon_files","gencode.vM24.annotation.gtf.gz")
+txdb <- GenomicFeatures::makeTxDbFromGFF(ingtf)
+tx <- transcripts(txdb, columns=c("tx_name", "gene_id"))
+txdf <- as.data.frame(mcols(tx))
+txdf$tx_name <- paste0(txdf$tx_name, ".premrna")
+write.table(txdf, row.names = FALSE, quote = FALSE, col.names = FALSE,
+            file = here("salmon_files", "tx_gene_map_premrna.tsv"),
+            sep = "\t")
+```
+
+## Run alevin 
+
+```{bash}
+mkdir salmon_quants_preandmrna_1C
+mkdir salmon_quants_preandmrna_2E
+mkdir salmon_quants_preandmrna_3C
+mkdir salmon_quants_preandmrna_4E
+mkdir salmon_quants_preandmrna_5C
+mkdir salmon_quants_preandmrna_8E
+
+salmon alevin -l ISR -1 /home/risso/data/peixoto_2020-01/1C/1C_S1_L001_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/1C/1C_S1_L002_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/1C/1C_S1_L003_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/1C/1C_S1_L004_R1_001.fastq.gz -2 /home/risso/data/peixoto_2020-01/1C/1C_S1_L001_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/1C/1C_S1_L002_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/1C/1C_S1_L003_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/1C/1C_S1_L004_R2_001.fastq.gz --chromiumV3 -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA -p 20 -o salmon_quants_preandmrna_1C --tgMap salmon_files/tx_gene_map.tsv --forceCells 10000
+
+salmon alevin -l ISR -1 /home/risso/data/peixoto_2020-01/2E/2E_S1_L001_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/2E/2E_S1_L002_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/2E/2E_S1_L003_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/2E/2E_S1_L004_R1_001.fastq.gz -2 /home/risso/data/peixoto_2020-01/2E/2E_S1_L001_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/2E/2E_S1_L002_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/2E/2E_S1_L003_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/2E/2E_S1_L004_R2_001.fastq.gz --chromiumV3 -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA -p 20 -o salmon_quants_preandmrna_2E --tgMap salmon_files/tx_gene_map.tsv --forceCells 10000
+
+salmon alevin -l ISR -1 /home/risso/data/peixoto_2020-01/3C/3C_S1_L001_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/3C/3C_S1_L002_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/3C/3C_S1_L003_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/3C/3C_S1_L004_R1_001.fastq.gz -2 /home/risso/data/peixoto_2020-01/3C/3C_S1_L001_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/3C/3C_S1_L002_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/3C/3C_S1_L003_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/3C/3C_S1_L004_R2_001.fastq.gz --chromiumV3 -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA -p 20 -o salmon_quants_preandmrna_3C --tgMap salmon_files/tx_gene_map.tsv --forceCells 10000
+
+salmon alevin -l ISR -1 /home/risso/data/peixoto_2020-01/4E/4E_S1_L001_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/4E/4E_S1_L002_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/4E/4E_S1_L003_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/4E/4E_S1_L004_R1_001.fastq.gz -2 /home/risso/data/peixoto_2020-01/4E/4E_S1_L001_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/4E/4E_S1_L002_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/4E/4E_S1_L003_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/4E/4E_S1_L004_R2_001.fastq.gz --chromiumV3 -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA -p 20 -o salmon_quants_preandmrna_4E --tgMap salmon_files/tx_gene_map.tsv --forceCells 10000
+
+salmon alevin -l ISR -1 /home/risso/data/peixoto_2020-01/5C/5C_S1_L001_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/5C/5C_S1_L002_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/5C/5C_S1_L003_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/5C/5C_S1_L004_R1_001.fastq.gz -2 /home/risso/data/peixoto_2020-01/5C/5C_S1_L001_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/5C/5C_S1_L002_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/5C/5C_S1_L003_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/5C/5C_S1_L004_R2_001.fastq.gz --chromiumV3 -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA -p 20 -o salmon_quants_preandmrna_5C --tgMap salmon_files/tx_gene_map.tsv --forceCells 10000
+
+salmon alevin -l ISR -1 /home/risso/data/peixoto_2020-01/8E/8E_S1_L001_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/8E/8E_S1_L002_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/8E/8E_S1_L003_R1_001.fastq.gz /home/risso/data/peixoto_2020-01/8E/8E_S1_L004_R1_001.fastq.gz -2 /home/risso/data/peixoto_2020-01/8E/8E_S1_L001_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/8E/8E_S1_L002_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/8E/8E_S1_L003_R2_001.fastq.gz /home/risso/data/peixoto_2020-01/8E/8E_S1_L004_R2_001.fastq.gz --chromiumV3 -i salmon_files/gencode.vM24_salmon-index-v1.0.0-mRNA -p 20 -o salmon_quants_preandmrna_8E --tgMap salmon_files/tx_gene_map.tsv --forceCells 10000
+```
+
+## Set up the tximeta package 
+
+Next, we use the `tximeta` package to create a SummarizedExperiment object.
+If we try to run `tximeta(coldata)`, that will fail because `tximeta` won't be able to detect automatically what the reference transcriptome is. 
+So, here we create our own [linked transcriptome](https://bioconductor.org/packages/release/bioc/vignettes/tximeta/inst/doc/tximeta.html#linked_transcriptomes) from the combined GTF file.
+
+A `linkedTxome` records key information about the sources of the transcript FASTA files, and the location of the relevant GTF file. 
+It also records the checksum of the transcriptome that was computed by Salmon during the index step.
+
+For some reason this does not work
+
+```{r, eval=FALSE}
+suppressPackageStartupMessages({
+  library(tximeta)
+})
+
+# create linkedTranscriptome 
+index_dir <- here("salmon_files", "gencode.vM24_salmon-index-v1.0.0-mRNA")
+fasta_path <-  here("salmon_files", "gencode.vM24.preandmrna.fa.gz")
+gtf_path <-  here("salmon_files", "gencode.vM24.preandmrnaaannotation.gtf") 
+
+json_file <- here("salmon_files", paste0(basename(index_dir), ".json"))
+makeLinkedTxome(indexDir=index_dir,
+                source="other", organism="Mus musculus",
+                release="other", genome="GRCm38",
+                fasta=fasta_path, gtf=gtf_path,
+                jsonFile=json_file) # this command will add the index to the cache automatically
+```
+
+## Create SummarizedExperiment object
+
+```{r}
+library(tximeta)
+library(scater)
+library(scran)
+
+alevin_quant <- here("salmon_quants_preandmrna_1C/alevin", "quants_mat.gz")
+alevin <- tximeta::tximeta(coldata = data.frame(files = alevin_quant,
+                                                names = "Sample1C"), 
+                           type = "alevin")
+whitelist <- read.table(here("salmon_quants_preandmrna_1C/alevin", "whitelist.txt"),
+                        stringsAsFactors = FALSE)
+alevin$whitelist <- colnames(alevin) %in% whitelist[,1]
+alevin <- as(alevin, "SingleCellExperiment")
+saveRDS(alevin, file = here("salmon_quants_preandmrna_1C", "sce.rds"))
+```
+

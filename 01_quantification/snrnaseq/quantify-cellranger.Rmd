@@ -1,0 +1,34 @@
+---
+title: Quantification of snRNA-seq data after sleep deprivation with cell ranger 
+author: Davide Risso
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(here)
+```
+
+# Quantification 
+
+## Download files needed for cell ranger
+
+We need to download 2 files:
+
+1. Cell Ranger Binaries (3.1.0)
+2. Cell Ranger mouse reference (3.0.0)
+Source: https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/latest
+
+## Run Cell Ranger
+
+```{bash}
+export PATH=/home/risso/src/cellranger-3.1.0:$PATH
+
+cellranger count --id=sample_1C \
+  --fastqs=/home/risso/data/peixoto_2020-01/1C \
+  --sample=1C \
+  --transcriptome=/home/risso/data/references/refdata-cellranger-mm10-3.0.0
+```

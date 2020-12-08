@@ -1,0 +1,129 @@
+---
+title: "Identify differential genes and transcripts"
+author: "Stephanie Hicks"
+date: "11/28/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Load libraries
+```{r}
+suppressPackageStartupMessages({
+  library(here)
+  library(DESeq2)
+  library(fishpond)
+  library(IHW)
+  library(tidyverse)
+})
+```
+
+Load data 
+```{r}
+se <- readRDS(here("data", "se_mouse_sleep.rds"))
+gse <- readRDS(here("data", "gse_mouse_sleep.rds"))
+
+pdat <- readr::read_csv(here("01_quantification", "bulk", 
+                             "data", "SRA_geo_metadata.csv"))
+
+pdat %>% select("description", "genotype:ch1")
+```
+
+
+# Gene-level analyses
+
+In this section, I ran some quick analyses to identify DE genes
+
+## DESeq2
+
+### Using all animals 
+
+Using only the cage control animals, we compared the WT vs Mutant mice
+```{r}
+dds <- DESeqDataSet(gse, ~ genotype + status)
+dds <- DESeq(dds)
+res <- results(dds)
+
+vsd <- vst(dds, blind=FALSE)
+plotPCA(vsd, intgroup=c("genotype", "status"))
+```
+
+
+### Using control cage animals only
+
+Using only the cage control animals, we compared the WT vs Mutant mice
+```{r}
+dds <- DESeqDataSet(gse[,gse$status == "cage_control"], ~ genotype)
+dds <- DESeq(dds)
+res <- results(dds)
+```
+
+```{r}
+res05 <- results(dds, alpha=0.05)
+summary(res05)
+# > summary(res05)
+# out of 31465 with nonzero total read count
+# adjusted p-value < 0.05
+# LFC > 0 (up)       : 12, 0.038%
+# LFC < 0 (down)     : 7, 0.022%
+# outliers [1]       : 24, 0.076%
+# low counts [2]     : 8800, 28%
+# (mean count < 1)
+# [1] see 'cooksCutoff' argument of ?results
+# [2] see 'independentFiltering' argument of ?results
+
+res05[!is.na(res05$padj) & res05$padj < 0.05,]
+as.character(mcols(dds)[match(rownames(res05[!is.na(res05$padj) & res05$padj < 0.05,]), rownames(mcols(dds))),]$SYMBOL)
+
+rowData(dds)
+plotMA(res, ylim=c(-2,2))
+plotCounts(dds, gene=which.min(res$padj), intgroup="genotype")
+
+vsd <- vst(dds, blind=FALSE)
+rld <- rlog(dds, blind=FALSE)
+
+plotPCA(vsd, intgroup=c("genotype"))
+```
+
+
+
+
+### Using sleep deprived animals only
+
+Using only the sleep deprived animals, we compared the WT vs Mutant mice
+```{r}
+dds <- DESeqDataSet(gse[,gse$status == "sleep_dep"], ~ genotype)
+dds <- DESeq(dds)
+res <- results(dds)
+```
+
+```{r}
+res05 <- results(dds, alpha=0.05)
+summary(res05)
+# > summary(res05)
+# 
+# out of 30535 with nonzero total read count
+# adjusted p-value < 0.05
+# LFC > 0 (up)       : 8, 0.026%
+# LFC < 0 (down)     : 15, 0.049%
+# outliers [1]       : 28, 0.092%
+# low counts [2]     : 7380, 24%
+# (mean count < 1)
+# [1] see 'cooksCutoff' argument of ?results
+# [2] see 'independentFiltering' argument of ?results
+
+rowData(dds)
+plotMA(res, ylim=c(-2,2))
+plotCounts(dds, gene=which.min(res$padj), intgroup="genotype")
+
+vsd <- vst(dds, blind=FALSE)
+rld <- rlog(dds, blind=FALSE)
+
+plotPCA(vsd, intgroup=c("genotype"))
+```
+
+
+## fishpond / swish 
+

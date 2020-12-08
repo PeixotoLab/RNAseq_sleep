@@ -1,0 +1,35 @@
+---
+title: "NewWave analysis"
+author: "Davide Risso"
+date: "2/24/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(here)
+library(scater)
+library(NewWave)
+```
+
+## Dimensionality reduction with NewWave
+
+```{r readin}
+merged <- readRDS("merged.rds")
+keep <- merged$celltype %in% c("Astro", "L2/3 IT", "L5 IT", "Pvalb", "L6 CT", "L5 PT", "Sst")
+merged <- merged[,keep]
+merged
+
+keepgenes <- edgeR::filterByExpr(counts(merged), group = merged$celltype, min.count = 1)
+table(keepgenes)
+merged <- merged[keepgenes,]
+counts(merged) <- round(as.matrix(counts(merged)))
+nb <- nbwave(merged, X = "~ batch", children = 6)
+```
+

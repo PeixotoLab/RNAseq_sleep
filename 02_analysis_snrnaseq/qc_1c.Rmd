@@ -1,0 +1,156 @@
+---
+title: "QC for sample 1C"
+author: "Davide Risso"
+date: "1/31/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(here)
+library(scater)
+library(DropletUtils)
+```
+
+# Preliminaries
+
+## Import data in SCE
+
+```{r}
+sce <- readRDS(here("salmon_quants_preandmrna_1C", "sce.rds"))
+sce
+```
+
+## Gene Symbols
+
+It is useful to have gene symbols in the row data.
+
+```{r}
+library(EnsDb.Mmusculus.v79)
+ensids <- sapply(strsplit(rownames(sce), ".", fixed = TRUE), function(x) x[1])
+map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SYMBOL", keytype = "GENEID")
+stopifnot(length(map) == nrow(sce))
+rowData(sce)$SYMBOL <- map
+map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SEQNAME", keytype = "GENEID")
+stopifnot(length(map) == nrow(sce))
+rowData(sce)$CHR <- map
+rowData(sce)
+```
+
+# Quality Control
+
+We cannot run `emptyDrops()` because apparently Salmon does its own filtering, even though I force 10,000 cells.
+
+```{r}
+stats <- perCellQCMetrics(sce, subsets=list(Mito=which(rowData(sce)$CHR=="MT")))
+high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
+
+table(high.mito)
+colData(sce) <- cbind(colData(sce), stats)
+sce$discard <- high.mito
+
+gridExtra::grid.arrange(
+    plotColData(sce, y="sum", colour_by="discard") +
+        scale_y_log10() + ggtitle("Total count"),
+    plotColData(sce, y="detected", colour_by="discard") +
+        scale_y_log10() + ggtitle("Detected features"),
+    plotColData(sce, y="subsets_Mito_percent",
+        colour_by="discard") + ggtitle("Mito percent"),
+    ncol=2
+)
+```
+
+## Calling cells
+
+```{r}
+bcrank <- barcodeRanks(counts(sce))
+
+# Only showing unique points for plotting speed.
+uniq <- !duplicated(bcrank$rank)
+plot(bcrank$rank[uniq], bcrank$total[uniq], log="xy",
+    xlab="Rank", ylab="Total UMI count", cex.lab=1.2)
+
+abline(h=metadata(bcrank)$inflection, col="darkgreen", lty=2)
+abline(h=metadata(bcrank)$knee, col="dodgerblue", lty=2)
+
+legend("bottomleft", legend=c("Inflection", "Knee"), 
+        col=c("darkgreen", "dodgerblue"), lty=2, cex=1.2)
+
+plot(stats$sum, stats$subsets_Mito_percent, log="x",
+    xlab="Total count", ylab='Mitochondrial %')
+abline(h=attr(high.mito, "thresholds")["higher"], col="red")
+```
+
+## Filtering cells
+
+```{r}
+qc.lib <- isOutlier(stats$sum, log=TRUE, type="lower")
+table(qc.lib)
+qc.nexprs <- isOutlier(stats$detected, log=TRUE, type="lower")
+table(qc.nexprs)
+discard <- qc.lib | qc.nexprs | high.mito
+table(discard)
+
+filtered <- sce[,!discard]
+filtered
+```
+
+# Quick analysis
+
+Here, we perform a quick analysis to check that we can identify reasonable cell types.
+
+## Normalization
+
+```{r}
+library(scran)
+set.seed(100)
+clust <- quickCluster(filtered) 
+table(clust)
+filtered <- computeSumFactors(filtered, cluster=clust, min.mean=0.1)
+filtered <- logNormCounts(filtered)
+filtered
+```
+
+## PCA
+
+```{r}
+library(matrixStats)
+library(BiocSingular)
+vars <- rowVars(as.matrix(logcounts(filtered)))
+names(vars) <- rownames(filtered)
+top.vars <- names(sort(vars, decreasing = TRUE))[1:1000]
+filtered <- runPCA(filtered, subset_row = top.vars, BSPARAM=IrlbaParam(), ncomponents = 30)
+```
+
+## Clustering
+
+```{r}
+library(BiocNeighbors)
+snn.gr <- buildSNNGraph(filtered, BNPARAM=AnnoyParam(), use.dimred="PCA")
+clusters <- igraph::cluster_louvain(snn.gr)
+table(clusters$membership)
+filtered$clusters <- as.factor(clusters$membership)
+filtered <- runTSNE(filtered, external_neighbors = TRUE, BNPARAM=AnnoyParam(), dimred = "PCA")
+plotTSNE(filtered, colour_by = "clusters")
+```
+
+## Assigning cell labels
+
+```{r}
+library(SingleR)
+ref <- MouseRNAseqData()
+rownames(filtered) <- rowData(filtered)$SYMBOL
+pred <- SingleR(test=filtered, ref=ref, labels=ref$label.fine)
+tab <- table(Assigned=pred$pruned.labels, Cluster=filtered$clusters)
+tab
+
+library(pheatmap)
+pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101))
+```
+

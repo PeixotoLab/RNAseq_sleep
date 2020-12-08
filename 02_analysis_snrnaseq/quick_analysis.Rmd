@@ -1,0 +1,378 @@
+---
+title: "Quick analysis"
+author: "Davide Risso"
+date: "1/31/2020"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+```{r}
+library(here)
+library(scater)
+library(DropletUtils)
+library(tximeta)
+library(EnsDb.Mmusculus.v79)
+```
+
+# Preliminaries
+
+## Import data in SCE
+
+```{r}
+if(!file.exists("sces.rds")) {
+  sample_dirs <- paste0("salmon_quants_preandmrna_", c("1C", "2E", "3C", "4E", "5C", "8E"), "/alevin")
+  names(sample_dirs) <- paste0("Sample", c("1C", "2E", "3C", "4E", "5C", "8E"))
+  sces <- list()
+  for(i in seq_along(sample_dirs)) {
+    
+    alevin_quant <- here(sample_dirs[i], "quants_mat.gz")
+    alevin <- tximeta::tximeta(coldata = data.frame(files = alevin_quant,
+                                                    names = names(sample_dirs)[1]), 
+                               type = "alevin")
+    whitelist <- read.table(here(sample_dirs[i], "whitelist.txt"),
+                            stringsAsFactors = FALSE)
+    alevin$whitelist <- colnames(alevin) %in% whitelist[,1]
+    
+    ensids <- sapply(strsplit(rownames(alevin), ".", fixed = TRUE), function(x) x[1])
+    map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SYMBOL", keytype = "GENEID")
+    stopifnot(length(map) == nrow(alevin))
+    rowData(alevin)$SYMBOL <- map
+    map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SEQNAME", keytype = "GENEID")
+    stopifnot(length(map) == nrow(alevin))
+    rowData(alevin)$CHR <- map
+    sces[[i]] <- as(alevin, "SingleCellExperiment")
+  }
+  saveRDS(sces, file = "sces.rds")  
+} else {
+  sces <- readRDS("sces.rds")
+}
+```
+
+# Quality Control
+
+```{r}
+for(i in seq_along(sces)) {
+  stats <- perCellQCMetrics(sces[[i]], subsets=list(Mito=which(rowData(sces[[i]])$CHR=="MT")))
+  high.mito <- isOutlier(stats$subsets_Mito_percent, type="higher")
+  
+  colData(sces[[i]]) <- cbind(colData(sces[[i]]), stats)
+  sces[[i]]$high.mito <- high.mito
+  
+  gridExtra::grid.arrange(
+    plotColData(sces[[i]], y="sum", colour_by="high.mito") +
+      scale_y_log10() + ggtitle("Total count"),
+    plotColData(sces[[i]], y="detected", colour_by="high.mito") +
+      scale_y_log10() + ggtitle("Detected features"),
+    plotColData(sces[[i]], y="subsets_Mito_percent",
+                colour_by="high.mito") + ggtitle("Mito percent"),
+    ncol=2
+  )
+}
+```
+
+## Calling cells
+
+```{r}
+for(i in seq_along(sces)) {
+  bcrank <- barcodeRanks(counts(sces[[i]]))
+  
+  # Only showing unique points for plotting speed.
+  uniq <- !duplicated(bcrank$rank)
+  plot(bcrank$rank[uniq], bcrank$total[uniq], log="xy",
+       xlab="Rank", ylab="Total UMI count", cex.lab=1.2)
+  
+  abline(h=metadata(bcrank)$inflection, col="darkgreen", lty=2)
+  abline(h=metadata(bcrank)$knee, col="dodgerblue", lty=2)
+  
+  legend("bottomleft", legend=c("Inflection", "Knee"), 
+         col=c("darkgreen", "dodgerblue"), lty=2, cex=1.2)
+  
+  plot(sces[[i]]$sum, sces[[i]]$subsets_Mito_percent, log="x",
+       xlab="Total count", ylab='Mitochondrial %')
+  abline(h=attr(sces[[i]]$high.mito, "thresholds")["higher"], col="red")
+}
+```
+
+## Filtering cells
+
+```{r}
+print(sapply(sces, ncol))
+for(i in seq_along(sces)) {
+  qc.lib <- isOutlier(sces[[i]]$sum, log=TRUE, type="lower")
+  table(qc.lib)
+  qc.nexprs <- isOutlier(sces[[i]]$detected, log=TRUE, type="lower")
+  table(qc.nexprs)
+  discard <- qc.lib | qc.nexprs | sces[[i]]$high.mito
+  table(discard)
+  
+  sces[[i]] <- sces[[i]][,!discard]
+}
+print(sapply(sces, ncol))
+```
+
+# Quick analysis
+
+Here, we perform a quick analysis to check that we can identify reasonable cell types.
+
+## Normalization
+
+```{r}
+library(scran)
+library(mbkmeans)
+library(BiocParallel)
+set.seed(100)
+for(i in seq_along(sces)) {
+##  clust <- mbkmeans(sces[[i]], clusters = 10, reduceMethod = NA)$Clusters
+##  sces[[i]] <- computeSumFactors(sces[[i]], cluster=clust, min.mean=0.1, BPPARAM = MulticoreParam(6))
+  sces[[i]] <- logNormCounts(sces[[i]])
+}
+```
+
+## PCA and preliminary clusters
+
+```{r, results='asis'}
+library(matrixStats)
+library(BiocSingular)
+library(BiocNeighbors)
+
+for(i in seq_along(sces)) {
+  vars <- rowVars(as.matrix(logcounts(sces[[i]])))
+  names(vars) <- rownames(sces[[i]])
+  top.vars <- names(sort(vars, decreasing = TRUE))[1:1000]
+  sces[[i]] <- runPCA(sces[[i]], subset_row = top.vars, BSPARAM=IrlbaParam(), ncomponents = 30)
+  sces[[i]] <- runTSNE(sces[[i]], external_neighbors = TRUE, BNPARAM=AnnoyParam(), dimred = "PCA")
+  snn.gr <- buildSNNGraph(sces[[i]], BNPARAM=AnnoyParam(), use.dimred="PCA")
+  clusters <- igraph::cluster_louvain(snn.gr)
+  sces[[i]]$clusters <- as.factor(clusters$membership)
+  rowData(sces[[i]])$top.vars <- rownames(sces[[i]]) %in% top.vars
+  print(plotTSNE(sces[[i]], colour_by = "clusters"))
+}
+```
+
+## Integrating samples
+
+```{r}
+library(batchelor)
+set.seed(8867)
+chosen.hvgs <- lapply(sces, function(sce) rownames(sce)[rowData(sce)$top.vars])
+chosen.hvgs <- unique(unlist(chosen.hvgs))
+mnn.out <- fastMNN(sces[[1]], sces[[2]], sces[[3]], sces[[4]],
+                   sces[[5]], sces[[6]], d=50, k=20, subset.row=chosen.hvgs,
+    BSPARAM=BiocSingular::RandomParam(deferred=TRUE))
+mnn.out
+```
+
+## Clustering
+
+```{r}
+snn.gr <- buildSNNGraph(mnn.out, use.dimred="corrected")
+clusters.mnn <- igraph::cluster_louvain(snn.gr)$membership
+tab.mnn <- table(Cluster=clusters.mnn, Batch=mnn.out$batch)
+tab.mnn
+
+set.seed(422)
+mnn.out <- runTSNE(mnn.out, dimred="corrected", external_neighbors = TRUE, BNPARAM=AnnoyParam())
+
+mnn.out$batch <- factor(mnn.out$batch)
+mnn.out$clusters <- factor(clusters.mnn)
+plotTSNE(mnn.out, colour_by="batch")
+plotTSNE(mnn.out, colour_by="clusters")
+
+set.seed(242)
+mnn.out <- runUMAP(mnn.out, dimred="corrected", external_neighbors = TRUE, BNPARAM=AnnoyParam())
+
+plotUMAP(mnn.out, colour_by="batch")
+plotUMAP(mnn.out, colour_by="clusters")
+```
+
+## Assigning cell labels
+
+```{r}
+library(SingleR)
+library(dplyr)
+## use custom reference (this is not reproducible unless the rds file is present)
+if(!file.exists("allen_smarter.rds")) {
+  exons <- read.csv("~/Dropbox (unipd)/BICCN MiniBrain JointDataAnalysis (1)/Zeng/SMARTer_cells_MOp/exon.counts.csv.gz", row.names = 1)
+  introns <- read.csv("~/Dropbox (unipd)/BICCN MiniBrain JointDataAnalysis (1)/Zeng/SMARTer_cells_MOp/intron.counts.csv.gz", row.names = 1)
+  cl <- read.csv("~/Dropbox (unipd)/BICCN MiniBrain JointDataAnalysis (1)/Zeng/SMARTer_cells_MOp/cluster.membership.csv", row.names = 1)
+  colnames(cl) <- "cluster_id"
+  annotation <- read.csv("~/Dropbox (unipd)/BICCN MiniBrain JointDataAnalysis (1)/Zeng/SMARTer_cells_MOp/cluster.annotation.csv")
+  cl <- inner_join(cl, annotation, by = "cluster_id")
+  zeng <- SingleCellExperiment(assays = list(counts = exons + introns),
+                               colData = cbind(cl, metadata))
+  saveRDS(zeng, file = "allen_smarter.rds")
+} else {
+  zeng <- readRDS("allen_smarter.rds")
+}
+
+## Add symbol to combined data
+ensids <- sapply(strsplit(rownames(mnn.out), ".", fixed = TRUE), function(x) x[1])
+map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SYMBOL", keytype = "GENEID")
+stopifnot(length(map) == nrow(mnn.out))
+rowData(mnn.out)$ENSEMBL <- ensids
+rowData(mnn.out)$SYMBOL <- map
+mnn.out <- mnn.out[!is.na(rowData(mnn.out)$SYMBOL),]
+rownames(mnn.out) <- rowData(mnn.out)$SYMBOL
+mnn.out <- mnn.out[rownames(mnn.out) != "Snrpn",]
+
+zeng <- logNormCounts(zeng)
+zeng_pseudo <- aggregateAcrossCells(zeng, 
+    id=DataFrame(
+        label=zeng$subclass_label)
+)
+zeng_pseudo <- logNormCounts(zeng_pseudo)
+pred <- SingleR(test=mnn.out, ref=zeng_pseudo, labels=zeng_pseudo$subclass_label,
+                assay.type.test = "reconstructed")
+
+annotation <- read.csv("~/Dropbox (unipd)/BICCN MiniBrain JointDataAnalysis (1)/Zeng/SMARTer_cells_MOp/cluster.annotation.csv")
+annotation <- unique(annotation[,c(2, 3)])
+annotation <- annotation[annotation$class_label != "Noise",]
+
+tmp <- as.data.frame(pred)
+colnames(tmp)[ncol(tmp)] <- "subclass_label"
+predictions <- left_join(tmp, annotation, by = "subclass_label")
+table(predictions$subclass_label)
+table(predictions$class_label)
+
+tab <- table(Assigned=predictions$subclass_label, Cluster=mnn.out$batch)
+tab
+
+library(pheatmap)
+pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101))
+
+write.table(predictions, file = "celltype_predictions.tsv", sep = "\t", quote = FALSE, row.names = FALSE)
+
+colData(mnn.out) <- cbind(colData(mnn.out), predictions)
+plotTSNE(mnn.out, colour_by="subclass_label")
+plotTSNE(mnn.out, colour_by="class_label")
+
+plotUMAP(mnn.out, colour_by="subclass_label")
+plotUMAP(mnn.out, colour_by="class_label")
+
+treatment <- rep("control", ncol(mnn.out))
+treatment[mnn.out$batch %in% c(2, 4, 6)] <- "treated"
+mnn.out$treatment <- treatment
+
+plotTSNE(mnn.out, colour_by="treatment")
+tab <- table(Assigned=mnn.out$subclass_label, Treatment=mnn.out$treatment)
+round(tab/colSums(tab)*100, 2)
+
+pheatmap(log2(tab+10), color=colorRampPalette(c("white", "blue"))(101), scale = "column")
+saveRDS(mnn.out, file = "combined_sce.rds")
+```
+
+
+```{r}
+merged <- noCorrect(sces[[1]], sces[[2]], sces[[3]], sces[[4]], sces[[5]], sces[[6]], assay.type = "logcounts")
+colData(merged)$celltype <- mnn.out$subclass_label
+colData(merged)$treatment <- mnn.out$treatment
+colData(merged)$clusters <- mnn.out$clusters
+
+assayNames(merged) <- "logcounts"
+
+counts(merged) <- cbind(counts(sces[[1]]), counts(sces[[2]]), counts(sces[[3]]),
+                        counts(sces[[4]]), counts(sces[[5]]), counts(sces[[6]]))
+
+ensids <- sapply(strsplit(rownames(merged), ".", fixed = TRUE), function(x) x[1])
+map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SYMBOL", keytype = "GENEID")
+rowData(merged)$SYMBOL <- map
+rowData(merged)$ENSEMBL <- names(map)
+merged <- merged[!is.na(rowData(merged)$SYMBOL),]
+merged <- merged[!(rowData(merged)$SYMBOL %in% names(which(table(rowData(merged)$SYMBOL) >= 2))),]
+rownames(merged) <- rowData(merged)$SYMBOL
+
+summed <- aggregateAcrossCells(merged, 
+    id=DataFrame(
+        label=merged$celltype,
+        sample=merged$batch)
+)
+summed
+
+summed2 <- aggregateAcrossCells(merged, 
+    id=DataFrame(
+        label=merged$clusters,
+        sample=merged$batch)
+)
+summed2
+
+saveRDS(merged, file = "merged.rds")
+```
+
+## Gene markers
+
+```{r}
+known_markers <- c("Gad1", "Gad2", "Slc32a1", "Slc17a7", "Lamp5", "Ndnf", "Sncg", "Vip", "Sst", "Chodl", "Pvalb", "Cux2", "Rorb", "Fezf2", "Gfap", "Camk2a", "Shank3", "P2ry12")
+intersect(known_markers, rownames(merged))
+
+plotTSNE(mnn.out, colour_by="Slc17a7", by_exprs_values = "reconstructed")
+plotTSNE(mnn.out, colour_by="Sst", by_exprs_values = "reconstructed")
+plotTSNE(mnn.out, colour_by="Cux2", by_exprs_values = "reconstructed")
+plotTSNE(mnn.out, colour_by="Rorb", by_exprs_values = "reconstructed")
+plotTSNE(mnn.out, colour_by="Camk2a", by_exprs_values = "reconstructed")
+
+plotExpression(merged, x="celltype", features=rownames(merged)[rowData(merged)$SYMBOL %in% known_markers])
+plotExpression(merged, x="clusters", features=rownames(merged)[rowData(merged)$SYMBOL %in% known_markers])
+
+summed <- logNormCounts(summed)
+colnames(summed) <- paste0("cell", seq(ncol(summed)))
+df <- data.frame(colData(summed))[,c("celltype", "treatment")]
+pheatmap(logcounts(summed)[rownames(summed)[rowData(summed)$SYMBOL %in% known_markers],order(summed$celltype)],
+         annotation_col = df, cluster_cols = FALSE)
+
+summed2 <- logNormCounts(summed2)
+colnames(summed2) <- paste0("cell", seq(ncol(summed2)))
+df <- data.frame(colData(summed2))[,c("clusters", "treatment")]
+pheatmap(logcounts(summed2)[rownames(summed2)[rowData(summed2)$SYMBOL %in% known_markers],order(summed2$clusters)],
+         annotation_col = df, cluster_cols = FALSE)
+
+saveRDS(summed, file = "summed_sce.rds")
+```
+
+## Differential expression
+
+```{r}
+# label <- "Astro"
+label <- "Sst"
+# label <- "L5 IT"
+current <- summed[,summed$celltype == label]
+current
+
+# Creating up a DGEList object for use in edgeR:
+library(edgeR)
+y <- DGEList(counts(current), samples=colData(current))
+discarded <- isOutlier(y$samples$lib.size, log=TRUE, type="lower")
+y <- y[,!discarded]
+keep <- filterByExpr(y, group=current$treatment)
+table(keep)
+y <- calcNormFactors(y)
+
+design <- model.matrix(~factor(current$treatment), y$samples)
+y <- estimateDisp(y, design)
+plotBCV(y)
+fit <- glmFit(y, design)
+res <- glmLRT(fit, coef=ncol(design))
+summary(decideTests(res))
+topTags(res)
+
+pos <- read.table("pos_ctrls_WT_DE_FDR_0_01.tsv", stringsAsFactors = FALSE)
+print(intersect(pos[,1], rownames(topTags(res))))
+```
+
+# Sample-by-sample analysis
+
+```{r, results='asis'}
+for(i in seq_along(sces)) {
+  sce <- sces[[i]]
+  rownames(sce) <- rowData(sce)$SYMBOL
+  pred <- SingleR(test=sce, ref=zeng, labels=zeng$subclass_label, de.method="wilcox",
+                assay.type.test = "logcounts")
+  sces[[i]]$subclass_label <- pred$pruned.labels
+  print(plotTSNE(sces[[i]], colour_by="subclass_label"))
+}
+```

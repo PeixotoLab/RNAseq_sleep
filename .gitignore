@@ -1,0 +1,17 @@
+# R files
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+
+# Ignore these files
+fastq_files/*
+01_quantification/log/*
+01_quantification/bulk/log/*
+01_quantification/snrnaseq/alevinQC/*.html
+data/
+
+# Ignore annoying files
+.DS_Store
+.Rhistory
+.RData
