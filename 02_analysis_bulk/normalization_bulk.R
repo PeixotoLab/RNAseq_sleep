@@ -13,9 +13,6 @@ library(RUVSeq)
 library(ffpe)
 library(RColorBrewer)
 
-# set the working directory
-setwd("~/R/data_processing")
-
 # First, read the SD counts in R:
 sdrs <- read.table("SD_RS_WT_salmon_gene_level_data.txt", row.names = 1, header = TRUE)
 head(sdrs)
@@ -24,9 +21,32 @@ head(sdrs)
 dim(sdrs)
 # [1] 54347    20
 
-# Next, read the the positive control file:
-positive <- read.table("Peixoto_SD_RS_Positive_Controls.txt", as.is = TRUE, sep = "\t", header = TRUE )
-x <- as.factor(rep(c("HC5", "HC7", "SD5", "RS2"), each= 5))
+# Next, read the the positive control file
+## DR: we use the same controls that Dario used in the eLife paper
+library(readxl)
+outfile <- "SD_RS_PosControls_final.xlsx"
+if(!file.exists(outfile)) {
+  download.file("https://github.com/drighelli/peixoto/blob/master/data/controls/SD_RS_PosControls_final.xlsx?raw=true",
+                destfile = outfile)
+}
+sd.lit.pos.ctrls <- read_excel(outfile, 
+                               sheet=1)
+colnames(sd.lit.pos.ctrls) <- sd.lit.pos.ctrls[1,]
+sd.lit.pos.ctrls <- sd.lit.pos.ctrls[-1,]
+sd.est.pos.ctrls <- read_excel(outfile, 
+                               sheet=3)
+sd.pos.ctrls <- cbind(sd.est.pos.ctrls$`Ensembl ID`, "est")
+
+library("org.Mm.eg.db")
+pos.map <- AnnotationDbi::select(org.Mm.eg.db, 
+                                 keys=sd.lit.pos.ctrls$Gene, 
+                                 keytype="SYMBOL",
+                                 columns=c("SYMBOL", "ENSEMBL"))
+pos.map <- na.omit(pos.map)
+sd.pos.ctrls <- rbind(sd.pos.ctrls, cbind(pos.map[,2], "lit"))
+
+## DR: here there was a mistake: SD5 and RS2 samples were swapped.
+x <- as.factor(rep(c("HC5", "HC7", "RS2", "SD5"), each= 5))
 names(x) <- colnames(sdrs)
 
 # Then, filter out non expressed genes:
@@ -36,25 +56,36 @@ dim(filtered)
 # [1] 18084    20
 
 # The positive control file contains SD and RS positive controls
-# There are 558 SD positive controls
-SDup <- intersect(positive[positive[, 3] == "UP", 1], rownames(filtered))
-SDdown <- intersect(positive[positive[, 3] == "DOWN", 1], rownames(filtered))
-
-# RS positive controls
-RSup <- intersect(positive[positive[, 4] == "UP", 1], rownames(filtered))
-RSdown <- intersect(positive[positive[, 4] == "DOWN", 1], rownames(filtered))
-
-colors <- brewer.pal(9, "Set1")
-colLib <- colors[x]
+## DR: There are 1184 SD positive controls (not sure where Katie's numbers come from)
 
 # Upper Quartile Normalization (divides the read count by the 75th percentile of the read counts in its sample)
+## DR: I've left UQ normalization here, but Dario used TMM which he says works better
 uq <- betweenLaneNormalization(filtered, which = "upper")
 dim(uq)
 # [1] 18084    20
 
-# For negative controls, read the rownames of the uq data:
-rownames(uq)
-negCon <- rownames(uq)
+# For negative controls
+## DR: we actually have a list of negative controls, so not sure about using all genes.
+## DR: Again, I'm using the same Dario used in the eLife paper
+outfile <- "AdditionalFile4_BMC.xlsx"
+if(!file.exists(outfile)) {
+  download.file("https://github.com/drighelli/peixoto/blob/master/data/controls/Additional%20File%204%20full%20list%20of%20BMC%20genomics%20SD&RS2.xlsx?raw=true",
+                destfile = outfile)
+}
+
+sd.ctrls <- read_excel(path=outfile, sheet=1)
+sd.ctrls <- sd.ctrls[order(sd.ctrls$adj.P.Val),]
+
+sd.neg.ctrls <- sd.ctrls[sd.ctrls$adj.P.Val > 0.9, ]
+
+sd.neg.ctrls <- sd.neg.ctrls$`Ensembl ID`
+sd.neg.ctrls <- sd.neg.ctrls[-which(is.na(sd.neg.ctrls))]
+
+int.neg.ctrls <- sd.neg.ctrls
+int.neg.ctrls <- unique(int.neg.ctrls)
+
+colors <- brewer.pal(9, "Set1")
+colLib <- colors[x]
 
 # Generating RLE Plots: RLE plots reveal confounders when the mean and the variance are not similar.
 plotRLE(uq, col= colLib, outline = FALSE, las = 3, ylim = c(-0.5, 0.5), ylab = "Relative Log Expression", cex.axis = 1, cex.lab = 1)
@@ -63,8 +94,10 @@ plotRLE(uq, col= colLib, outline = FALSE, las = 3, ylim = c(-0.5, 0.5), ylab = "
 plotPCA(uq, col = colLib, cex = 1, cex.axis = 1, cex.lab = 1, xlim = c(-0.75, 0.75), ylim = c(-0.75, 0.75))
 
 # RUV Normalization with k=5.
+## DR: using the negative controls for RUVs normalization
 groups <- matrix(data = c(1:5, 6:10, 11:15, 16:20), nrow = 4, byrow = TRUE)
-s <- RUVs(x=uq, cIdx=rownames(uq), scIdx=groups, k= 5)
+neg <- intersect(int.neg.ctrls, rownames(uq))
+s <- RUVs(x=uq, cIdx=neg, scIdx=groups, k= 5)
 
 # Following RUV Normalization, plot RLE and PCA: 
 plotRLE(s$normalizedCounts, col = colLib, outline = FALSE, las = 3, ylim = c(-0.5, 0.5), ylab= "Relative Log Expression", cex.axis = 1, cex.lab = 1)
@@ -106,6 +139,7 @@ y <- calcNormFactors(y, method = "upperquartile")
 y <- estimateGLMCommonDisp(y, design, verbose = TRUE)
 ## Disp = 0.01037 , BCV = 0.1018 
 
+## DR: here I've left the GLM approach, but Dario used the QLF test (see ?glmQLFTest)
 y <- estimateGLMTagwiseDisp(y, design) 
 fit <- glmFit(y, design)
 dim(y)
@@ -116,8 +150,8 @@ topUQSD <- topTags(lrt, n = Inf)$table
 topTags(lrt) # the results of de
 topTags <- topTags(lrt)
 topTags
-save(topTags, file= ("'edgeRresult.txt'"))
-('edgeRresult.txt')
+# save(topTags, file= ("'edgeRresult.txt'"))
+# ('edgeRresult.txt')
 
 ## Histogram
 hist(topUQSD$PValue, main = "", xlab = "p-value", breaks = 100, ylim = c(0, 1400))
@@ -130,11 +164,12 @@ de <- rownames(topUQSD[topUQSD$FDR <= 0.05, ]) # In eLife it was less than 0.05
 points(topUQSD[de, 1], -log10(topUQSD[de, "PValue"]), pch = 20, col = colors[2], cex = 1, lwd = 2)
 
 # positive controls are red
-points(topUQSD[SDup, 1], -log10(topUQSD[SDup, "PValue"]), pch = 1, col = colors[1], cex = 1, lwd = 2)
-points(topUQSD[SDdown, 1], -log10(topUQSD[SDdown, "PValue"]), pch = 1, col = colors[1], cex = 1, lwd = 2)
+sd.pos <- intersect(sd.pos.ctrls[,1], rownames(filtered))
+
+points(topUQSD[sd.pos, 1], -log10(topUQSD[sd.pos, "PValue"]), pch = 1, col = colors[1], cex = 1, lwd = 2)
 
 # negative controls are green
-points(topUQSD[negCon, 1], -log10(topUQSD[negCon, "PValue"]), pch = 1, col = colors[3], cex = 1, lwd = 2)
+points(topUQSD[neg, 1], -log10(topUQSD[neg, "PValue"]), pch = 1, col = colors[3], cex = 1, lwd = 2)
 
 
 ### Differential Expression: RUV Normalization
@@ -210,14 +245,13 @@ de <- rownames(topSD[topSD$FDR <= 0.05, ])
 points(topSD[de, 1], -log10(topSD[de, "PValue"]), pch = 20, col = colors[2], cex = 1)
 
 # positive controls are red
-points(topSD[SDup, 1], -log10(topSD[SDup, "PValue"]), pch = 20, col = colors[1], cex =1, lwd = 2)
-points(topSD[SDdown, 1], -log10(topSD[SDdown, "PValue"]), pch = 1, col = colors[1], lwd = 2)
+points(topSD[sd.pos, 1], -log10(topSD[sd.pos, "PValue"]), pch = 20, col = colors[1], cex =1, lwd = 2)
 
 # negative controls are green
-points(topSD[negCon, 1], -log10(topSD[negCon, "PValue"]), pch = 1, col = colors[3], cex = 1, lwd = 2)
+points(topSD[neg, 1], -log10(topSD[neg, "PValue"]), pch = 1, col = colors[3], cex = 1, lwd = 2)
 
 ## Determine the percentage of positive control genes detected
-((sum(topSD[SDup, "FDR"] < .05) + sum(topSD[SDdown, "FDR"] < .05))/558) * 100
+(sum(topSD[sd.pos, "FDR"] < .05)/NROW(sd.pos.ctrls)) * 100
 # [1] 49.10394
 
 ## The number of non de genes
