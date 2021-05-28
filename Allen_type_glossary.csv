@@ -1,0 +1,16 @@
+Class,Neighborhood,Label,description,notes
+Non-neuronal,Other,CR,Cajal-Retzius,glutamatercic (mostly layer 1)
+Non-neuronal,Other,Meis2,Meis2 neruons,GABAergic (mostly white matter) related to olfactory bulb interneurons
+Non-neuronal,Other,Oligo,Oligodendrocytes,11 clusters
+Non-neuronal,Other,Astro,Astrocytes,3 clusters
+Non-neuronal,Other,Endo,Endothelial,1 cluster
+Non-neuronal,Other,SMC,Smooth Muscle Cell,3 clusters
+Non-neuronal,Other,Peri,Pericyte,1 cluster
+Non-neuronal,Other,VLMC,vascular/leptomeningeal cell,3 clusters
+Non-neuronal,Other,PVM,microglia/perivascular macrophage,3 clusters
+GABAergic,caudal ganglionic eminence (CGE),Lamp5,Lamp5 GABAergic neurons,mostly 4 supertypes
+GABAergic,caudal ganglionic eminence (CGE),Sncg,Sncg GABAergic neurons, 5 supertypes
+GABAergic,caudal ganglionic eminence (CGE),Vip,Vip GABAergic neurons, 6 supertypes
+GABAergic,medial ganglionic eminence (MGE),Sst Chodl,long-range projecting Sst cells,1 group
+GABAergic,medial ganglionic eminence (MGE),Sst,Sst GABAergic neurons, 11 supertypes
+GABAergic,medial ganglionic eminence (MGE),Pvalb,Pvalb GABAergic neurons, 3 supertypes
