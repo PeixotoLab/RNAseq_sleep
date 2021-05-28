@@ -14,3 +14,14 @@ GABAergic,caudal ganglionic eminence (CGE),Vip,Vip GABAergic neurons, 6 supertyp
 GABAergic,medial ganglionic eminence (MGE),Sst Chodl,long-range projecting Sst cells,1 group
 GABAergic,medial ganglionic eminence (MGE),Sst,Sst GABAergic neurons, 11 supertypes
 GABAergic,medial ganglionic eminence (MGE),Pvalb,Pvalb GABAergic neurons, 3 supertypes
+Glutamatergic,L2/3 IT,L2/3 IT PPP,?,?
+Glutamatergic,L2/3 IT,L2/3 IT ENT,?,?
+Glutamatergic,L2/3 IT,L2/3 IT ENTm,?,?
+Glutamatergic,L2/3 IT,L2/3 IT ENTI,?,?
+Glutamatergic,L2/3 IT,L2 IT ENTI,?,?
+Glutamatergic,L2/3 IT,L2/3 IT CTX,?,?
+Glutamatergic,L2/3 IT,L2/3 IT RHP,?,?
+Glutamatergic,L4/5/6 IT Car3,?,?,?
+Glutamatergic,PT,?,?,?
+Glutamatergic,NP/CT/L6b,?,?,?
+Glutamatergic,DG/SUB/CA,?,?,?
