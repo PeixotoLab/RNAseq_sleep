@@ -14,19 +14,19 @@ GABAergic,caudal ganglionic eminence (CGE),Vip,Vip GABAergic neurons, 6 supertyp
 GABAergic,medial ganglionic eminence (MGE),Sst Chodl,long-range projecting Sst cells,1 group
 GABAergic,medial ganglionic eminence (MGE),Sst,Sst GABAergic neurons, 11 supertypes
 GABAergic,medial ganglionic eminence (MGE),Pvalb,Pvalb GABAergic neurons, 3 supertypes
-Glutamatergic,L2/3 IT,L2/3 IT PPP,?,?
-Glutamatergic,L2/3 IT,L2/3 IT ENT,?,?
-Glutamatergic,L2/3 IT,L2/3 IT ENTm,?,?
-Glutamatergic,L2/3 IT,L2/3 IT ENTI,?,?
-Glutamatergic,L2/3 IT,L2 IT ENTI,?,?
-Glutamatergic,L2/3 IT,L2/3 IT CTX,?,?
-Glutamatergic,L2/3 IT,L2/3 IT RHP,?,?
-Glutamatergic,L4/5/6 IT Car3,L4/5 IT CTX,?,?
-Glutamatergic,L4/5/6 IT Car3,L5 IT CTX,?,?
-Glutamatergic,L4/5/6 IT Car3,L5/6 IT TPE-ENT,?,?
-Glutamatergic,L4/5/6 IT Car3,L6 IT CTX,?,?
-Glutamatergic,L4/5/6 IT Car3,L6 IT ENTI,?,?
-Glutamatergic,L4/5/6 IT Car3,Car3,?,?
+Glutamatergic,L2/3 IT,L2/3 IT PPP,Layer 2/3 intratelencephalic Post-Pre-Para-subiculum (PPP),?
+Glutamatergic,L2/3 IT,L2/3 IT ENT,Layer 2/3 intratelencephalic Entorhinal cortex,?
+Glutamatergic,L2/3 IT,L2/3 IT ENTm,Layer 2/3 intratelencephalic medial entorhinal area,?
+Glutamatergic,L2/3 IT,L2/3 IT ENTI,Layer 2/3 intratelencephalic lateral entorhinal area,?
+Glutamatergic,L2/3 IT,L2 IT ENTI,Layer 2 intratelencephalic lateral entorhinal area,?
+Glutamatergic,L2/3 IT,L2/3 IT CTX,Layer 2/3 intratelencephalic isocortex,?
+Glutamatergic,L2/3 IT,L2/3 IT RHP,Layer 2/3 intratelencephalic retrohippocampal region,?
+Glutamatergic,L4/5/6 IT Car3,L4/5 IT CTX,Layer 4/5 intratelencephalic isocortex,?
+Glutamatergic,L4/5/6 IT Car3,L5 IT CTX,Layer 5 intratelencephalic isocortex,?
+Glutamatergic,L4/5/6 IT Car3,L5/6 IT TPE-ENT,Layer 5/6 intratelencephalic Temporal associatio (TEa) perirhinal (PERI) ectorhinal (ECT) entorhinal (ENT),?
+Glutamatergic,L4/5/6 IT Car3,L6 IT CTX,Layer 6 intratelencephalic isocortex,?
+Glutamatergic,L4/5/6 IT Car3,L6 IT ENTI,Layer 6 intratelencephalic entorhinal area,?
+Glutamatergic,L4/5/6 IT Car3,Car3,Car3+ L6 neurons,from L6 of many lateral cortical areas, extensive intracortical axon projections
 Glutamatergic,PT,L5 PT CTX,?,?
 Glutamatergic,PT,L4 RSP-ACA,?,?
 Glutamatergic,PT,L5/6 NP CTX,?,?
