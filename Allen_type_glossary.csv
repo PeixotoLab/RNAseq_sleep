@@ -1,6 +1,6 @@
 Class,Neighborhood,Label,description,notes
 Non-neuronal,Other,CR,Cajal-Retzius,glutamatercic (mostly layer 1)
-Non-neuronal,Other,Meis2,Meis2 neruons,GABAergic (mostly white matter) related to olfactory bulb interneurons
+Non-neuronal,Other,Meis2,Meis2 neurons,GABAergic (mostly white matter) related to olfactory bulb interneurons
 Non-neuronal,Other,Oligo,Oligodendrocytes,11 clusters
 Non-neuronal,Other,Astro,Astrocytes,3 clusters
 Non-neuronal,Other,Endo,Endothelial,1 cluster
