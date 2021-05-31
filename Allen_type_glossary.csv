@@ -21,7 +21,23 @@ Glutamatergic,L2/3 IT,L2/3 IT ENTI,?,?
 Glutamatergic,L2/3 IT,L2 IT ENTI,?,?
 Glutamatergic,L2/3 IT,L2/3 IT CTX,?,?
 Glutamatergic,L2/3 IT,L2/3 IT RHP,?,?
-Glutamatergic,L4/5/6 IT Car3,?,?,?
-Glutamatergic,PT,?,?,?
-Glutamatergic,NP/CT/L6b,?,?,?
-Glutamatergic,DG/SUB/CA,?,?,?
+Glutamatergic,L4/5/6 IT Car3,L4/5 IT CTX,?,?
+Glutamatergic,L4/5/6 IT Car3,L5 IT CTX,?,?
+Glutamatergic,L4/5/6 IT Car3,L5/6 IT TPE-ENT,?,?
+Glutamatergic,L4/5/6 IT Car3,L6 IT CTX,?,?
+Glutamatergic,L4/5/6 IT Car3,L6 IT ENTI,?,?
+Glutamatergic,L4/5/6 IT Car3,Car3,?,?
+Glutamatergic,PT,L5 PT CTX,?,?
+Glutamatergic,PT,L4 RSP-ACA,?,?
+Glutamatergic,PT,L5/6 NP CTX,?,?
+Glutamatergic,NP/CT/L6b,NP SUB,?,?
+Glutamatergic,NP/CT/L6b,NP PPP,?,?
+Glutamatergic,NP/CT/L6b,L6 CT CTX,?,?
+Glutamatergic,NP/CT/L6b,CT SUB,?,?
+Glutamatergic,NP/CT/L6b,L6b/CT ENT,?,?
+Glutamatergic,NP/CT/L6b,L6b CTX,?,?
+Glutamatergic,DG/SUB/CA,SUB-ProS,?,?
+Glutamatergic,DG/SUB/CA,CA1-ProS,?,?
+Glutamatergic,DG/SUB/CA,CA3,?,?
+Glutamatergic,DG/SUB/CA,CA2-IG-FC,?,?
+Glutamatergic,DG/SUB/CA,DG,?,?
