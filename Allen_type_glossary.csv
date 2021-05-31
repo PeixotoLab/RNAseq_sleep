@@ -27,7 +27,7 @@ Glutamatergic,L4/5/6 IT Car3,L5/6 IT TPE-ENT,Layer 5/6 intratelencephalic Tempor
 Glutamatergic,L4/5/6 IT Car3,L6 IT CTX,Layer 6 intratelencephalic isocortex,?
 Glutamatergic,L4/5/6 IT Car3,L6 IT ENTI,Layer 6 intratelencephalic entorhinal area,?
 Glutamatergic,L4/5/6 IT Car3,Car3,Car3+ L6 neurons,from L6 of many lateral cortical areas extensive intracortical axon projections
-Glutamatergic,PT,L5 PT CTX,Layer 5 pyramidal tract isocortex,?
+Glutamatergic,PT,L5 PT CTX,Layer 5 pyramidal tract isocortex,AKA extratelencephalic or subcerebral projection neurons (SCPNs)
 Glutamatergic,PT,L4 RSP-ACA,Layer 4 retrosplenial anterior cingulate,?
 Glutamatergic,PT,L5/6 NP CTX,Layer 5/6 near-projecting isocortex,?
 Glutamatergic,NP/CT/L6b,NP SUB,near-projecting subiculum,?
