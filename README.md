@@ -7,6 +7,7 @@ This repository contains the code and analyses for the analysis of bulk RNA-seq 
 - Stephanie Hicks (shicks19@jhu.edu)
 - Davide Risso (drisso@gmail.com)
 - Katie Ford (kaitlyn.ford@wsu.edu)
+- Elena Zuin (elena.zuin3@gmail.com)
 
 ## Data 
 
@@ -302,3 +303,36 @@ We save the combined `SingleCellExperiment` object at the gene-level as a `.RDS`
 
 - Helpful vignette: https://combine-lab.github.io/alevin-tutorial/2020/alevin-velocity/
 
+#### Data setting, quality control, normalization and doublets removal
+To analyze the data the UMI counts of exons and the introns with the same ensembl IDs were added up. To identify mitochondrial genes, mouse ensembl IDs were converted to chromosome identifier with the EnsDb.Mmusculus.v79 (v2.99.0) package. We split the data into six SingleCellExperiment objects, one for each mouse.
+
+For each sample, the Bioconductor scuttle (v1.8.4) package was used to detect low quality and damaged droplets. Particularly, the perCellQCMetrics function to calculate useful per-cell QC metrics: the sum of counts and the number of detected features. In this case, these statistics were computed also for mitochondrial genes. Then, we used the logNormCounts function of the scuttle package to apply the normalization factors and obtain the log-normalized counts.
+
+Lastly, for each sample the doublets were removed with the scDblFinder (v1.12.0) package, using the computeDoubletDensity function to calculate the scores and the doubletThresholding function to set the doublet scores threshold with griffiths method.
+
+#### Cell-type annotation
+To identify cell types we used the Allen Whole Cortex & Hippocampus - 10x genomics (v2021) as reference dataset (cite https://www.sciencedirect.com/science/article/pii/S0092867421005018). This dataset was imported by the loadHDF5SummarizedExperiment function of the HDF5Array (v1.26.0) package and was converted to a SingleCellExperiment object available at https://github.com/drighelli/AllenInstituteBrainData. 
+We then selected the “Non-Neuronal”, “Glutamatergic” and “GABAergic” clusters coming from the Visual Cortex (VIS, VISl, VISm, VISp) to annotate our dataset. For computational issues, we selected a random subset of 100,000 cortical cells.
+
+Cell annotation was computed using two methods: Azimuth and SingleR. For the first method, the reference data was converted into a Seurat object and into a Azimuth compatible object, using the AzimuthReference function of the Azimuth (v0.4.6) package. Then query samples were merged and were converted into a Seurat object. Cell annotation was computed using the RunAzimuth function of the Azimuth package. The t-SNE and the UMAP projections were computed using the RunTSNE and RunUMAP functions of the Seurat (v 4.3.0) package with seed.use = 1.
+
+For the second method, the reference dataset was aggregated across groups of cell type and was normalized, using the aggregateAcrossCells and the logNormCounts functions of the scuttle (v1.8.4) package, and the gene symbols were converted to ensembl with the function getBM of the biomaRt (v2.54.0) package. Then, cell annotation was computed using the SingleR function of SingleR (v2.0.0) package.
+
+For each side, to visualize the assigned labels in two dimensions, the t-SNE and the UMAP projections were computed using the DimPlot function of Seurat package, with option reduction = "integrated_dr”, where "integrated_dr” is the supervised principal component analysis obtained by the Azimuth method.
+
+Also, a pseudo-bulk level Multidimensional Scaling (MDS) plot was created with the pbMDS function of muscat (v1.12.1) package. Each point represents one subpopulation-sample instance; points are colored by subpopulation and shaped by group ID.
+
+#### Differential expression analysis
+For each neuronal cell-type with more than 500 cells, the differential gene expression analysis was carried out with a negative binomial generalized linear model (GLM) on pseudo-bulk samples.
+
+For the GLM model, we created the pseudo-bulk samples with the function aggregateAcrossCells of the scuttle package. In other words, we computed sum counts values for each feature across cell-type and mouse groups.
+We made a Remove Unwanted Variation (RUV) normalization with k=1 on each neuronal cell-type, using the RUVs function of the RUVSeq (v1.32.0) package. We used the negative control genes coming from microarray analysis to estimate the factor of unwanted variation. The 10% negative control genes were randomly selected. The remaining control genes were used to fit RUV normalization. 
+
+To visualize the principal component analysis of RUV normalization, we used the plotPCA function of the EDASeq (v2.32.0) package.
+
+We then used the Bioconductor edgeR (v3.40.2) package. Before the differential gene expression analysis, the genes were filtered with the function filterByExpr (with default parameters). The factor of unwanted variation was added in the design matrix. The differential gene expression analysis was computed with the function glmLRT by specifying “SD-HC” (Sleep Deprived vs Home Cage Control) as contrast and offset term equal to zero.
+
+To visualize the differential expressed genes the volcano plot was made for each cell type and each model, using the ggplot2 (v3.3.6) package. 
+Also, the p-value histogram was made for each cell-type and model, to check if the distribution was uniformly distributed between 0 and 1.
+
+We used the negative and positive controls defined in the ‘Bulk genome-wide gene expression (RNA-seq)’ section to evaluate the concordance between the bulk and single-nuclear differential expression results.
