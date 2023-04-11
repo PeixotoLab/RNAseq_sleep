@@ -1,0 +1,138 @@
+library(UpSetR)
+library(ComplexUpset)
+library(patchwork)
+
+df.RUVs1 <- readRDS("snRNA_edgeR_DFResults_RUVs1.rds")
+# select DGE
+edgeR.DEGs <- lapply(df.RUVs1, function(u) rownames(u[u$FDR<0.05,])) 
+
+DGE_Fishpond <- read.csv("Fishpond_Annotated_DGE.csv")
+DGE_Fishpond <- DGE_Fishpond$Gene_Stable_ID
+
+# Select intersection between DGE from bulk and snRNA DGE
+Fishpond.DGE <- lapply(edgeR.DEGs, function(u) intersect(u, DGE_Fishpond))
+
+# For Glutamatergic labels
+edgeR.list <- list("L2/3 IT CTX"=Fishpond.DGE[[1]], "L4/5 IT CTX"=Fishpond.DGE[[2]],
+                   "L5 IT CTX"=Fishpond.DGE[[3]],"L5 PT CTX"=Fishpond.DGE[[4]],
+                   "L5/6 NP CTX"=Fishpond.DGE[[5]], "L6 CT CTX" =Fishpond.DGE[[6]], 
+                   "L6 IT CTX" =Fishpond.DGE[[7]],"L6b CTX" =Fishpond.DGE[[8]])
+
+df.edgeRList <- fromList(edgeR.list)
+
+p1 <- upset(
+  df.edgeRList, colnames(df.edgeRList)[1:8],
+  min_size=10, sort_intersections_by = c('degree', 'cardinality'),sort_intersections="ascending",
+  name="",
+  keep_empty_groups=TRUE,
+  queries=list(
+    upset_query(set='L2/3 IT CTX', fill='#0BE652'),
+    upset_query(set='L4/5 IT CTX', fill='#00E5E5'),
+    upset_query(set='L5 IT CTX', fill='#50B2AD'),
+    upset_query(set='L5 PT CTX', fill='#0D5B78'),
+    upset_query(set='L5/6 NP CTX', fill='#3E9E64'),
+    upset_query(set='L6 CT CTX', fill='#2D8CB8'),
+    upset_query(set='L6 IT CTX', fill='#A19922'),
+    upset_query(set='L6b CTX', fill='#7044AA')
+  ),
+  base_annotations=list(
+    'Intersection size'=(
+      intersection_size(
+        bar_number_threshold=1,  # show all numbers on top of bars
+        width=0.5,   # reduce width of the bars
+        text = list(size=6)
+      )
+      # add some space on the top of the bars
+      + scale_y_continuous(expand=expansion(mult=c(0, 0.05)))
+      + theme(
+        # hide grid lines
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        # show axis lines
+        axis.line=element_line(colour='black')
+      )
+    )
+  ),
+  stripes=upset_stripes(
+    geom=geom_segment(size=12),  # make the stripes larger
+    colors=c('grey95', 'white')
+  ),
+  # to prevent connectors from getting the colorured
+  # use `fill` instead of `color`, together with `shape='circle filled'`
+  matrix=intersection_matrix(
+    geom=geom_point(
+      shape='circle filled',
+      size=5,
+      stroke=0
+    )
+  ),
+  set_sizes=(
+    upset_set_size(geom=geom_bar(width=0.4),filter_intersections=TRUE)
+    + theme(
+      axis.line.x=element_line(colour='black'),
+      axis.ticks.x=element_line()
+    )
+  ),
+  themes=upset_default_themes(text=element_text(size=25, color="black"))
+)  
+
+# For GABAergic
+edgeR.list <- list("Pvalb"=Fishpond.DGE[[9]], "Sst"=Fishpond.DGE[[10]],"Vip"=Fishpond.DGE[[11]])
+
+df.edgeRList <- fromList(edgeR.list)
+
+p2 <- upset(
+  df.edgeRList, colnames(df.edgeRList)[1:3],
+  min_size=4, sort_intersections_by = c('degree', 'cardinality'),sort_intersections="ascending",
+  name="",
+  keep_empty_groups=TRUE,
+  queries=list(
+    upset_query(set='Pvalb', fill='#D93137'),
+    upset_query(set='Sst', fill='#FF9900'),
+    upset_query(set='Vip', fill='#B864CC')
+  ),
+  base_annotations=list(
+    'Intersection size'=(
+      intersection_size(
+        bar_number_threshold=1,  # show all numbers on top of bars
+        width=0.5,   # reduce width of the bars
+        text = list(size=6)
+      )
+      # add some space on the top of the bars
+      + scale_y_continuous(expand=expansion(mult=c(0, 0.05)))
+      + theme(
+        # hide grid lines
+        panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        # show axis lines
+        axis.line=element_line(colour='black')
+      )
+    )
+  ),
+  stripes=upset_stripes(
+    geom=geom_segment(size=12),  # make the stripes larger
+    colors=c('grey95', 'white')
+  ),
+  # to prevent connectors from getting the colorured
+  # use `fill` instead of `color`, together with `shape='circle filled'`
+  matrix=intersection_matrix(
+    geom=geom_point(
+      shape='circle filled',
+      size=5,
+      stroke=0
+    )
+  ),
+  set_sizes=(
+    upset_set_size(geom=geom_bar(width=0.4),filter_intersections=TRUE)
+    + theme(
+      axis.line.x=element_line(colour='black'),
+      axis.ticks.x=element_line()
+    )
+  ),
+  themes=upset_default_themes(text=element_text(size=25, color="black"))
+)
+
+ggsave(p1, file="snRNA_UpSetPlot_Glutamatergic.pdf",  width = 30, height = 30, units = "cm")
+ggsave(p2, file="snRNA_UpSetPlot_GABAergic.pdf",  width = 30, height = 30, units = "cm")
+
+
