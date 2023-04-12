@@ -323,16 +323,16 @@ For each side, to visualize the assigned labels in two dimensions, the t-SNE and
 Also, a pseudo-bulk level Multidimensional Scaling (MDS) plot was created with the pbMDS function of muscat (v1.12.1) package. Each point represents one subpopulation-sample instance; points are colored by subpopulation and shaped by group ID.
 
 #### Differential expression analysis
-For each neuronal cell-type with more than 500 cells, the differential gene expression analysis was carried out with a negative binomial generalized linear model (GLM) on pseudo-bulk samples.
+For each neuronal cell-type with more than 500 cells, the differential gene expression analysis was carried out with two methods: a negative binomial generalized linear model (GLM) on pseudo-bulk samples and a negative binomial mixed effect model (NBMM) at the cell level.
 
-For the GLM model, we created the pseudo-bulk samples with the function aggregateAcrossCells of the scuttle package. In other words, we computed sum counts values for each feature across cell-type and mouse groups.
-We made a Remove Unwanted Variation (RUV) normalization with k=1 on each neuronal cell-type, using the RUVs function of the RUVSeq (v1.32.0) package. We used the negative control genes coming from microarray analysis to estimate the factor of unwanted variation. The 10% negative control genes were randomly selected. The remaining control genes were used to fit RUV normalization. 
+For the GLM model, we created the pseudo-bulk samples with the function aggregateAcrossCells of the scuttle package. In other words, we computed sum counts values for each feature across cell-type and mouse groups. We made a Remove Unwanted Variation (RUV) normalization with k=1 on each neuronal cell-type, using the RUVs function of the RUVSeq (v1.32.0) package. We used the negative control genes coming from microarray analysis to estimate the factor of unwanted variation. The 10% negative control genes were randomly selected. The remaining control genes were used to fit RUV normalization.
 
 To visualize the principal component analysis of RUV normalization, we used the plotPCA function of the EDASeq (v2.32.0) package.
 
 We then used the Bioconductor edgeR (v3.40.2) package. Before the differential gene expression analysis, the genes were filtered with the function filterByExpr (with default parameters). The factor of unwanted variation was added in the design matrix. The differential gene expression analysis was computed with the function glmLRT by specifying “SD-HC” (Sleep Deprived vs Home Cage Control) as contrast and offset term equal to zero.
 
-To visualize the differential expressed genes the volcano plot was made for each cell type and each model, using the ggplot2 (v3.3.6) package. 
-Also, the p-value histogram was made for each cell-type and model, to check if the distribution was uniformly distributed between 0 and 1.
+The negative binomial mixed effect model was computed with the function mmDS of the muscat (v1.12.1) package with option method=”nbinom”.
+
+To visualize the differential expressed genes the volcano plot was made for each cell type and each model, using the ggplot2 (v3.3.6) package. Also, the p-value histogram was made for each cell-type and model, to check if the distribution was uniformly distributed between 0 and 1.
 
 We used the negative and positive controls defined in the ‘Bulk genome-wide gene expression (RNA-seq)’ section to evaluate the concordance between the bulk and single-nuclear differential expression results.
