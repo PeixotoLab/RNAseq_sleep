@@ -4,6 +4,7 @@ library(edgeR)
 library(ggplot2)
 library(RUVSeq)
 library(ggrepel)
+library(muscat)
 
 # Differential Expression Analysis with RUVs k=1 ####
 # Load Pseudo-bulk 
@@ -271,3 +272,25 @@ n.DEGs.FP <- length(intersect(rownames(df.DEGs), DGE_Fishpond$Gene_Stable_ID)) #
 perc.DEGs.FP <- 100*round(n.DEGs.FP/n.FP,4) # Percetage of DEGs Fishpond/ DEGs FP detected
 
 n.nuclei <- 47649
+
+# Negative binomial mixed effect model (muscat) ####
+data <- readRDS("snRNA_SCE_CellAnnotation.rds")
+# We remove the cell-type with less 500 cells
+data <- data[,!c(data$Azimuth.labels=="Sst Chodl"|data$Azimuth.labels=="Car3"|data$Azimuth.labels=="Lamp5"|data$Azimuth.labels=="Sncg"|data$Azimuth.labels=="Endo"|data$Azimuth.labels=="VLMC")]
+
+data$class <- data$Azimuth.labels
+data$class[which(grepl("CTX", data$class))] <- "Glutamatergic"
+
+data$class[which(grepl("-", data$class))] <- "Other"
+data$class[which(grepl("Endo", data$class))] <- "Other"
+
+data$class[!(data$class=="Astro"|data$class=="Oligo"|data$class=="Glutamatergic"|
+               data$class=="Other")] <- "GABAergic"
+
+data <- data[,(data$class=="GABAergic"|data$class=="Glutamatergic")]
+
+data.muscat <- prepSCE(data, kid = "Azimuth.labels", gid = "condition", sid = "sample_id", drop = TRUE)
+
+nbmm <- mmDS(data.muscat, method = "nbinom") # NBMM model 
+# Save muscat results in .rds file
+saveRDS(nbmm, file = "snRNA_muscatResults.rds")                       
