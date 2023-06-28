@@ -5,12 +5,12 @@ library(edgeR)
 library(ggplot2)
 
 # Pseudo-bulk ####
-data <- readRDS("snRNA_SCE_CellAnnotation.rds")
+sce.obj <- readRDS("snRNA_SCE_CellAnnotation.rds")
 # We remove the cell-type with less than 500 cells
-data <- data[,!c(data$Azimuth.labels=="Car3"|data$Azimuth.labels=="Endo"|data$Azimuth.labels=="Lamp5"|
-                   data$Azimuth.labels=="Sncg"|data$Azimuth.labels=="Sst Chodl"|data$Azimuth.labels=="VLMC")]
-                   
-pseudo.bulk <- aggregateAcrossCells(data, use.assay.type = "counts", id=DataFrame(label=data$Azimuth.labels, sample=data$sample_id))
+sce.obj <- sce.obj[,!c(sce.obj$Azimuth.labels=="Car3"|sce.obj$Azimuth.labels=="Endo"|sce.obj$Azimuth.labels=="Lamp5"|
+                   sce.obj$Azimuth.labels=="Sncg"|sce.obj$Azimuth.labels=="Sst Chodl"|sce.obj$Azimuth.labels=="VLMC")]
+
+pseudo.bulk <- aggregateAcrossCells(sce.obj, use.assay.type = "counts", id=sce.objFrame(label=sce.obj$Azimuth.labels, sample=sce.obj$sample_id))
 colnames(pseudo.bulk) <- paste(pseudo.bulk$Azimuth.labels, pseudo.bulk$sample_id, sep="_")
 pseudo.bulk <- logNormCounts(pseudo.bulk)
 
@@ -25,6 +25,9 @@ pseudo.bulk$class[!(pseudo.bulk$class=="Astro"|pseudo.bulk$class=="Oligo"|pseudo
 saveRDS(pseudo.bulk, file = "snRNA_PseudoBulk.rds")
 
 # MDS plot ####
+# If this error appears: Error in element_line(linewidth = 0.2, color = "lightgrey") :unused argument (linewidth = 0.2)
+source("pbMDSfunction.R")
+
 load("AllenColorLabel.RData")
 # by neuronal subclass
 prep.SCE <- prepSCE(pseudo.bulk[,c(pseudo.bulk$class=="Glutamatergic"|pseudo.bulk$class=="GABAergic")],
@@ -32,7 +35,8 @@ prep.SCE <- prepSCE(pseudo.bulk[,c(pseudo.bulk$class=="Glutamatergic"|pseudo.bul
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+
+pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 neuronal.color <- subclass.color[-c(1:3,12:14,16,17,19,21)] # remove Non-Neuronal labels
 
@@ -45,7 +49,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,pseudo.bulk$class=="GABAergic"],
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 gaba.color <- neuronal.color[c(9:11)] 
 
@@ -58,7 +62,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,pseudo.bulk$class=="Glutamatergic"],
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 gluta.color <- neuronal.color[-c(9:11)] 
 
@@ -71,7 +75,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,(pseudo.bulk$class=="Astro"|pseudo.bulk$class==
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 non.neuronal.color <- subclass.color[-c(2:12,15,17:21)] # select Non-Neuronal labels
 
@@ -90,7 +94,7 @@ prep.SCE <- prepSCE(pseudo.neg[,!(pseudo.neg$class=="Astro"|pseudo.neg$class=="O
                     gid = "condition",  # group IDs 
                     sid = "sample",   # sample IDs 
                     drop = TRUE)
-pb <- aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 mds_plot <- pbMDS(pb) + scale_color_manual(values=neuronal.color)
 ggsave(mds_plot, file=paste("snRNA_MDSplot_NegControls_neuronal_subclass.pdf",sep = ""), width = 20, height = 20, units = "cm")
