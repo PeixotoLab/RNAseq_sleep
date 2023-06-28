@@ -12,6 +12,7 @@ library(SeuratData)
 library(ggplot2)
 library(biomaRt)
 library(SingleR)
+library(pheatmap)
 
 # Reference dataset ####
 # We used Allen Whole Cortex & Hippocampus - 10x genomics (v 2021) as reference dataset for cell annotation
@@ -73,23 +74,23 @@ SaveAnnoyIndex(object = reference.azimuth[["refdr.annoy.neighbors"]], file = fil
 saveRDS(object = reference.azimuth, file = file.path(ref.dir, "ref.Rds"))
 
 # Query dataset 
-data <- readRDS("snRNA_DataPreprocessing.rds")
+sce.obj <- readRDS("snRNA_DataPreprocessing.rds")
 # The samples were merged and were converted into a Seurat object
-counts <- cbind(counts(data[[1]]),counts(data[[2]]),counts(data[[3]]),counts(data[[4]]),counts(data[[5]]),counts(data[[6]]))
+counts <- cbind(counts(sce.obj[[1]]),counts(sce.obj[[2]]),counts(sce.obj[[3]]),counts(sce.obj[[4]]),counts(sce.obj[[5]]),counts(sce.obj[[6]]))
 
-sample_id <- c(data[[1]]$sample_id, data[[2]]$sample_id, data[[3]]$sample_id, data[[4]]$sample_id, 
-               data[[5]]$sample_id, data[[6]]$sample_id)
+sample_id <- c(sce.obj[[1]]$sample_id, sce.obj[[2]]$sample_id, sce.obj[[3]]$sample_id, sce.obj[[4]]$sample_id, 
+               sce.obj[[5]]$sample_id, sce.obj[[6]]$sample_id)
 
-condition <- c(data[[1]]$condition, data[[2]]$condition, data[[3]]$condition, data[[4]]$condition, 
-               data[[5]]$condition, data[[6]]$condition)
+condition <- c(sce.obj[[1]]$condition, sce.obj[[2]]$condition, sce.obj[[3]]$condition, sce.obj[[4]]$condition, 
+               sce.obj[[5]]$condition, sce.obj[[6]]$condition)
 
-data <-  SingleCellExperiment(assays=list(counts=counts))
-data$sample_id <- sample_id
-data$condition <- condition
-colnames(data) <- paste(colnames(data), data$sample_id, sep="_")
+sce.obj <-  SingleCellExperiment(assays=list(counts=counts))
+sce.obj$sample_id <- sample_id
+sce.obj$condition <- condition
+colnames(sce.obj) <- paste(colnames(sce.obj), sce.obj$sample_id, sep="_")
 
 # Dataset was converted into a Seurat object
-seurat.obj <- CreateSeuratObject(counts = counts(data), meta.data = data.frame(colData(data)), project = "SD")
+seurat.obj <- CreateSeuratObject(counts = counts(sce.obj), meta.data = data.frame(colData(sce.obj)), project = "SD")
 
 # Cell annotation with RunAzimuth on all cells
 seurat.obj <- RunAzimuth(seurat.obj, reference = "reference/")
@@ -123,17 +124,17 @@ aggregref <- aggregref[order(rownames(aggregref)),]
 rowData(aggregref)$ensembl_id <- ensembl.id$ensembl_gene_id
 rownames(aggregref) <- ensembl.id$ensembl_gene_id
 
-# Normalized data
-data <- logNormCounts(data)
+# Normalized SCE data
+sce.obj <- logNormCounts(sce.obj)
 
-pred.SigleR <- SingleR(data, ref=aggregref, labels=aggregref$subclass_label)
+pred.SigleR <- SingleR(sce.obj, ref=aggregref, labels=aggregref$subclass_label)
 
 # Save SingleR results into Seurat object for visualization
 seurat.obj$predicted.SingleR <- pred.SingleR$labels
 
 # Save cell-type annotation results into SingleCellExperiment object
-data$Azimuth.labels <- seurat.obj$predicted.subclass_label
-data$SingleR.labels <- pred.SigleR$labels
+sce.obj$Azimuth.labels <- seurat.obj$predicted.subclass_label
+sce.obj$SingleR.labels <- pred.SigleR$labels
 
 # Visualization with t-SNE plot and UMAP plot####
 # Allen color labels
@@ -183,7 +184,7 @@ ggsave(plot.so, file=paste("snRNA_UMAPplot_SingleR_NoLegend.pdf",sep = ""), widt
 
 # Save objects ####
 # We save a SingleCellExperimet object with all genes for differential expression analysis
-saveRDS(data, file = "snRNA_SCE_CellAnnotation.rds")
+saveRDS(sce.obj, file = "snRNA_SCE_CellAnnotation.rds")
 
 # We save Seurat object for visualization
 saveRDS(seurat.obj, file = "snRNA_Seurat_CellAnnotation.rds")
@@ -192,22 +193,75 @@ saveRDS(seurat.obj, file = "snRNA_Seurat_CellAnnotation.rds")
 save(aggregref, file = "Allen_aggregref.RData")
 saveRDS(reference, file = "Allen_MMv21_VIS.rds")
 
-# Cortex Markers ####
-# UMAP plots of cell-type markers expression were visualized to see if the cell-type annotation made sense.
+# Proportion of intron-containing reads ####
+# We computed the proportion of intron-containing reads to identify cell-type with low proportion of pre-mRNA
+# Load original single-nuclear RNA-seq Sleep Deprivation dataset
+data <- readRDS("/home/zuin/sce_mouse_sleep_snrnaseq_complete.rds")
+data$sample_id[data$sample_id=="8E"] <- "6E"
+data$condition <- data$sample_id
+data$condition[grep("C", data$condition)] <- "HC" # Home Cage (HC)
+data$condition[grep("E", data$condition)] <- "SD" # Sleep Deprivated (SD)
 
-# Markers
-markers <- c("Gfap","C1qa","Mbp","Sox9","Sox10","Glul","Mog","Camk2a","Gad1","Gad2",
-             "Slc32a1","Sst","Nos1","Pvalb","Htr3a","Vip","Cck","Reln","Npy","Calb2",
-             "Slc17a7","Nrgn","Foxp2","Otx1","Rorb","Etv1","Cux1","Tle4")
+data$sample_id <- paste(substr(data$sample_id,1,1), data$condition, sep = "")
+colnames(data) <- paste(colnames(data), data$sample_id, sep = "_")
 
-seurat.obj <- NormalizeData(seurat.obj)
+# Intersection between the columns of original and filtered dataset
+inter <- intersect(colnames(data), colnames(sce.obj))
+data <- data[,colnames(data) %in% inter]
+data$Azimuth.labels <- sce.obj$Azimuth.labels
 
-Idents(object = seurat.obj) <-  seurat.obj$predicted.subclass_label
+# Sum of gene expression for each column
+sum.tot <- colSums(counts(data))
 
-for (i in seq_along(markers)) {
-  p <- FeaturePlot(seurat.obj, features = markers[i], reduction="UMAP", 
-                   label=T, repel=T,label.size = 5) + labs(x = "UMAP1", y="UMAP2") +
-    scale_color_continuous(low = "#fffbf7", high = "red") 
-  ggsave(p, file=paste("snRNA_UMAPplot_",markers[i],".pdf",sep = ""),  width = 20, height = 20, units = "cm")
+# Select only intron-containing reads
+introns <- data[which(grepl("-I", rownames(data))),]
+# Sum of intronic expression 
+introns.sum <- colSums(counts(introns))
+# Proportion of intron-containing reads for each column
+prop.Intr <- introns.sum/sum.tot
+
+# Violin plot
+df <- as.data.frame(prop.Intr)
+df$sample_id <- data$sample_id
+df$CellType <- data$Azimuth.labels
+
+p <- ggplot(df, aes(x=sample_id, y=prop.Intr)) + 
+  geom_violin() + stat_summary(fun=median, geom="point", size=1, color="red") + # Add median 
+  labs(x="Sample", y = "Proportion Intronic Reads")+theme_classic(base_size = 7)
+ggsave(p, file="snRNA_ViolinPlot_ProportIntronicReads_Sample.jpg", width = 7, height = 7, units = "cm")
+ggsave(p, file="snRNA_ViolinPlot_ProportIntronicReads_Sample.pdf", width = 7, height = 7, units = "cm")
+
+
+for (i in 1:6) {
+  df.sample <- df[df$sample_id==levels(factor(df$sample_id))[i],]
+  p <- ggplot(df.sample, aes(x=CellType, y=prop.Intr)) + 
+    geom_violin() + stat_summary(fun=median, geom="point", size=1, color="red") + # Add median
+    labs(title=paste0(levels(factor(df$sample_id))[i]), x="Cell type", y = "Proportion Intronic Reads") + theme_classic(base_size = 7) +
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+  ggsave(p, file=paste("snRNA_ViolinPlot_ProportIntronicReads_Sample",i,".jpg",sep = ""), width = 7, height = 7, units = "cm")
+  ggsave(p, file=paste("snRNA_ViolinPlot_ProportIntronicReads_Sample",i,".pdf",sep = ""), width = 7, height = 7, units = "cm")
 }
 
+# Heatmap of cell-type specific markers #####
+markers <- read.table("markers.txt", header = TRUE)
+markers<- markers[order(markers$Ensembl_ID),]
+
+sce.markers <- sce[rownames(sce) %in% markers$Ensembl_ID,]
+sce.markers <- sce.markers[order(rownames(sce.markers)),]
+rownames(sce.markers) <- markers$Gene_Name
+
+cell.type <- levels(factor(sce$Azimuth.labels))
+average.celltype <- matrix(nrow = length(rownames(sce.markers)), ncol =length(levels(factor(sce.markers$Azimuth.labels))))
+for (j in seq_along(cell.type)) {
+  average.celltype[,j] <- rowMeans(logcounts(sce.markers[,sce.markers$Azimuth.labels==cell.type[j]]))
+}
+rownames(average.celltype) <- rownames(sce.markers)
+colnames(average.celltype) <- cell.type
+
+p.scale <- pheatmap(average.celltype, scale="row", fontsize = 7)
+ggsave(p.scale, file=paste("Peixoto_Figure4_Supplement3_part1.jpg",sep = ""),  width = 10, height = 10, units = "cm")
+ggsave(p.scale, file=paste("Peixoto_Figure4_Supplement3_part1.pdf",sep = ""),  width = 10, height = 10, units = "cm")
+
+p <- pheatmap(average.celltype, fontsize = 7)
+ggsave(p, file=paste("Peixoto_Figure4_Supplement3_part2.jpg",sep = ""),  width = 10, height = 10, units = "cm")
+ggsave(p, file=paste("Peixoto_Figure4_Supplement3_part2.pdf",sep = ""),  width = 10, height = 10, units = "cm")
