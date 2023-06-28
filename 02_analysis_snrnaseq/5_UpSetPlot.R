@@ -2,23 +2,27 @@ library(UpSetR)
 library(ComplexUpset)
 library(patchwork)
 
-df.RUVs1 <- readRDS("snRNA_edgeR_DFResults_RUVs1.rds")
-# select DGE
-edgeR.DEGs <- lapply(df.RUVs1, function(u) rownames(u[u$FDR<0.05,])) 
-
 DGE_Fishpond <- read.csv("Fishpond_Annotated_DGE.csv")
 DGE_Fishpond <- DGE_Fishpond$Gene_Stable_ID
 
+DTE_Fishpond <- read.csv("Fishpond_Annotated_DTE.csv")
+DTE_Fishpond <- DTE_Fishpond$Gene_Stable_ID
+
+PosCtrls <- read.table("Additional_File2_Positive_Controls.txt", header = T)
+
+df.RUVs1 <- readRDS("snRNA_edgeR_DFResults_RUVs1.rds")
+# select DEGs
+df.DEGs <- lapply(df.RUVs1, function(u) rownames(u[u$FDR<0.05,])) 
+
+# UpSet plot #####
 # Select intersection between DGE from bulk and snRNA DGE
-Fishpond.DGE <- lapply(edgeR.DEGs, function(u) intersect(u, DGE_Fishpond))
+Fishpond.DGE <- lapply(df.DEGs, function(u) intersect(u, DGE_Fishpond))
 
 # For Glutamatergic labels
-edgeR.list <- list("L2/3 IT CTX"=Fishpond.DGE[[1]], "L4/5 IT CTX"=Fishpond.DGE[[2]],
-                   "L5 IT CTX"=Fishpond.DGE[[3]],"L5 PT CTX"=Fishpond.DGE[[4]],
-                   "L5/6 NP CTX"=Fishpond.DGE[[5]], "L6 CT CTX" =Fishpond.DGE[[6]], 
-                   "L6 IT CTX" =Fishpond.DGE[[7]],"L6b CTX" =Fishpond.DGE[[8]])
+ll <- list("L2/3 IT CTX"=Fishpond.DGE[[1]], "L4/5 IT CTX"=Fishpond.DGE[[2]], "L5 IT CTX"=Fishpond.DGE[[3]],"L5 PT CTX"=Fishpond.DGE[[4]],
+           "L5/6 NP CTX"=Fishpond.DGE[[5]], "L6 CT CTX" =Fishpond.DGE[[6]], "L6 IT CTX" =Fishpond.DGE[[7]],"L6b CTX" =Fishpond.DGE[[8]])
 
-df.edgeRList <- fromList(edgeR.list)
+df.edgeRList <- fromList(ll)
 
 p1 <- upset(
   df.edgeRList, colnames(df.edgeRList)[1:8],
@@ -77,9 +81,9 @@ p1 <- upset(
 )  
 
 # For GABAergic
-edgeR.list <- list("Pvalb"=Fishpond.DGE[[9]], "Sst"=Fishpond.DGE[[10]],"Vip"=Fishpond.DGE[[11]])
+ll <- list("Pvalb"=Fishpond.DGE[[9]], "Sst"=Fishpond.DGE[[10]],"Vip"=Fishpond.DGE[[11]])
 
-df.edgeRList <- fromList(edgeR.list)
+df.edgeRList <- fromList(ll)
 
 p2 <- upset(
   df.edgeRList, colnames(df.edgeRList)[1:3],
@@ -135,4 +139,24 @@ p2 <- upset(
 ggsave(p1, file="snRNA_UpSetPlot_Glutamatergic.pdf",  width = 30, height = 30, units = "cm")
 ggsave(p2, file="snRNA_UpSetPlot_GABAergic.pdf",  width = 30, height = 30, units = "cm")
 
+# Intersection with DGE and DTE from bulk and Microarray #####
+# Up
+df.UpDEGs <- lapply(df.DEGs, function(u) u[u$logFC>=0,]) 
+# Down
+df.DownDEGs <- lapply(df.DEGs, function(u) u[u$logFC<0,])
 
+# DEGs single-nuclear
+Up.DEG <- lapply(df.UpDEGs, function(x) as.data.frame(rownames(x)))
+Down.DEG <- lapply(df.DownDEGs, function(x) as.data.frame(rownames(x)))
+
+# Intersection with DGE from bulk 
+Up.DGEbulk <- lapply(df.UpDEGs, function(x) as.data.frame(intersect(rownames(x), DGE_Fishpond)))
+Down.DGEbulk <- lapply(df.DownDEGs, function(x) as.data.frame(intersect(rownames(x), DGE_Fishpond)))
+
+# Intersection with DTE from bulk 
+Up.DTEbulk <- lapply(df.UpDEGs, function(x) as.data.frame(intersect(rownames(x), DTE_Fishpond)))
+Down.DTEbulk <- lapply(df.DownDEGs, function(x) as.data.frame(intersect(rownames(x), DTE_Fishpond)))
+
+# Intersection with Microarray
+Up.Pos <- lapply(df.UpDEGs, function(x) as.data.frame(intersect(rownames(x), PosCtrls$Gene_ID)))
+Down.Pos <- lapply(df.DownDEGs, function(x) as.data.frame(intersect(rownames(x), PosCtrls$Gene_ID)))
