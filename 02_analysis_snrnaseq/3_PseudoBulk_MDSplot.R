@@ -22,7 +22,7 @@ sce.obj <- sce.obj[,!c(sce.obj$Azimuth.labels=="Car3"|sce.obj$Azimuth.labels=="E
 # sce.obj$Azimuth.labels <- Azimuth.labels
 # sce.obj$SingleR.labels <- SingleR.labels
 
-pseudo.bulk <- aggregateAcrossCells(sce.obj, use.assay.type = "counts", id=sce.objFrame(label=sce.obj$Azimuth.labels, sample=sce.obj$sample_id))
+pseudo.bulk <- aggregateAcrossCells(sce.obj, use.assay.type = "counts", id=DataFrame(label=sce.obj$Azimuth.labels, sample=sce.obj$sample_id))
 colnames(pseudo.bulk) <- paste(pseudo.bulk$Azimuth.labels, pseudo.bulk$sample_id, sep="_")
 pseudo.bulk <- logNormCounts(pseudo.bulk)
 
