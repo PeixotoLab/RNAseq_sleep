@@ -5,14 +5,14 @@ library(scran)
 library(scDblFinder)
 
 # Bioconductor (v3.16) and R (v4.2.0)
-# Load single-nuclear RNA-seq Sleep Deprivation dataset ####
+# Load single-nuclear RNA-seq dataset ####
 data <- readRDS("/home/zuin/sce_mouse_sleep_snrnaseq_complete.rds")
 
-# Since there are introns and exons in this dataset, we decided to add up counts with the same ensembl. 
-# Introns were separated from exons
+# We added the UMI counts of spliced mRNA and introns sharing the same ensembl ID
+# Exons
 exons <- data[-which(grepl("-I", rownames(data))),]
 rownames(exons) <- substring(rownames(exons), 1, 18)
-
+# Introns
 introns <- data[which(grepl("-I", rownames(data))),]
 rownames(introns) <- substring(rownames(introns), 1, 18)
 
@@ -26,31 +26,33 @@ introns <- introns[order(rownames(introns)),]
 rownames(data) <- substring(rownames(data), 1, 18)
 data <- data[! rownames(data) %in% same.ensembl,] # remove the introns and exons with the same ensembl
 
-# A SingleCellExperiment object was created, adding up the exons and introns counts with the same ensembl
+# A new SingleCellExperiment object was created, where the UMI counts of spliced mRNA and introns sharing the same ensembl ID were added
 sce <- SingleCellExperiment(assays=list(counts=rbind(counts(data), counts(exons)+counts(introns))))
 colData(sce) <- colData(data)
 
 sce$sample_id[sce$sample_id=="8E"] <- "6E"
 
-# Sleep condition variable was created
+# We created the sleep condition variable
 sce$condition <- sce$sample_id
 sce$condition[grep("C", sce$condition)] <- "HC" # Home Cage (HC)
 sce$condition[grep("E", sce$condition)] <- "SD" # Sleep Deprivated (SD)
 
 sce$sample_id <- paste(substr(sce$sample_id,1,1), sce$condition, sep = "")
 
-# Mouse ensembl was converted to chromosome identifier, to identify mitochondrial genes
+# To identify mitochondrial genes, we retrieve the chromosome location of each ensembl gene
 ensids <- rownames(sce)
 map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids, column = "SEQNAME", keytype = "GENEID")
 stopifnot(length(map) == nrow(sce))
 rowData(sce)$CHR <- map
 
-# A SingleCellExperiment object was created for each sample
+# We split the data into six SingleCellExperiment objects, one for each mouse.
 sces <- list(sce[,sce$sample_id=="1HC"], sce[,sce$sample_id=="2SD"], sce[,sce$sample_id=="3HC"],
              sce[,sce$sample_id=="4SD"], sce[,sce$sample_id=="5HC"], sce[,sce$sample_id=="6SD"])
 
 # Pre-processing ####
-# We calculated useful per-cell metrics QC metrics: the sum of counts and the number of detected features. These statistics are computed for mitochondrial genes. 
+# For each sample, we detected low quality and damaged droplets. 
+# Particularly, we computed per-cell quality-control metrics; these metrics include the sum of UMI counts, 
+# the number of detected genes, and the percentage of mitochondrial counts.
 filter.sce <- list()
 for(i in seq_along(sces)) {
   print(i)

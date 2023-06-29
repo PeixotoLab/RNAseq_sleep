@@ -137,7 +137,7 @@ sce.obj$Azimuth.labels <- seurat.obj$predicted.subclass_label
 sce.obj$SingleR.labels <- pred.SigleR$labels
 
 # Visualization with t-SNE plot and UMAP plot####
-# Allen color labels
+# Palette color creation 
 allen.color <- data.frame(aggregref$subclass_label, aggregref$subclass_color, aggregref$class_label)
 colnames(allen.color) <- c("Label", "color","class")
 
