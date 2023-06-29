@@ -36,7 +36,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,c(pseudo.bulk$class=="Glutamatergic"|pseudo.bul
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
 
-pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <-  aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 neuronal.color <- subclass.color[-c(1:3,12:14,16,17,19,21)] # remove Non-Neuronal labels
 
@@ -49,7 +49,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,pseudo.bulk$class=="GABAergic"],
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <-  aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 gaba.color <- neuronal.color[c(9:11)] 
 
@@ -62,7 +62,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,pseudo.bulk$class=="Glutamatergic"],
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <-  aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 gluta.color <- neuronal.color[-c(9:11)] 
 
@@ -75,7 +75,7 @@ prep.SCE <- prepSCE(pseudo.bulk[,(pseudo.bulk$class=="Astro"|pseudo.bulk$class==
                     gid = "condition",  # group IDs 
                     sid = "sample_id",   # sample_id IDs 
                     drop = TRUE)
-pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <-  aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 non.neuronal.color <- subclass.color[-c(2:12,15,17:21)] # select Non-Neuronal labels
 
@@ -94,7 +94,7 @@ prep.SCE <- prepSCE(pseudo.neg[,!(pseudo.neg$class=="Astro"|pseudo.neg$class=="O
                     gid = "condition",  # group IDs 
                     sid = "sample",   # sample IDs 
                     drop = TRUE)
-pb <- aggregatesce.obj(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
+pb <-  aggregateData(prep.SCE, assay="logcounts",by = c("cluster_id", "sample_id"))
 
 mds_plot <- pbMDS(pb) + scale_color_manual(values=neuronal.color)
 ggsave(mds_plot, file=paste("snRNA_MDSplot_NegControls_neuronal_subclass.pdf",sep = ""), width = 20, height = 20, units = "cm")
