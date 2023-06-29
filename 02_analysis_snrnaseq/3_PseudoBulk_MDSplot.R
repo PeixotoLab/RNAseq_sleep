@@ -10,18 +10,6 @@ sce.obj <- readRDS("snRNA_SCE_CellAnnotation.rds")
 sce.obj <- sce.obj[,!c(sce.obj$Azimuth.labels=="Car3"|sce.obj$Azimuth.labels=="Endo"|sce.obj$Azimuth.labels=="Lamp5"|
                    sce.obj$Azimuth.labels=="Sncg"|sce.obj$Azimuth.labels=="Sst Chodl"|sce.obj$Azimuth.labels=="VLMC")]
 
-# Note: if scuttle::logNormCounts doesn't work, remake SingleCellExpression object.
-# counts <- counts(sce.obj)
-# sample_id <- sce.obj$sample_id
-# condition <- sce.obj$condition
-# Azimuth.labels <- sce.obj$Azimuth.labels
-# SingleR.labels <- sce.obj$SingleR.labels
-# sce.obj <- SingleCellExperiment(assays=list(counts=counts))
-# sce.obj$sample_id <- sample_id
-# sce.obj$condition <- condition
-# sce.obj$Azimuth.labels <- Azimuth.labels
-# sce.obj$SingleR.labels <- SingleR.labels
-
 pseudo.bulk <- aggregateAcrossCells(sce.obj, use.assay.type = "counts", id=DataFrame(label=sce.obj$Azimuth.labels, sample=sce.obj$sample_id))
 colnames(pseudo.bulk) <- paste(pseudo.bulk$Azimuth.labels, pseudo.bulk$sample_id, sep="_")
 pseudo.bulk <- logNormCounts(pseudo.bulk)
