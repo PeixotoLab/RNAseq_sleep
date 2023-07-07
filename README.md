@@ -220,7 +220,7 @@ Differential expression analysis of inferential replicate counts was carried out
 
 -	Our code was adapted from this helpful tutorial: https://bioconductor.org/packages/release/bioc/vignettes/fishpond/inst/doc/swish.html#Differential_transcript_expression
 
-To reproduce other figures in the analysis, please navigate to `02_analysis_bulk` then `02_Figures`
+To reproduce other figures in the analysis, please navigate to `02_analysis_bulk` then `02_plots`. Below is a summary of what code was used to reproduce which figures in the paper.
 
 ### snRNA-seq 
 
