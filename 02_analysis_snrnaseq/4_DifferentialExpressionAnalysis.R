@@ -166,8 +166,6 @@ dev.off()
 ## Volcano plot ####
 # Read smaller list of positive control genes 
 Highlight_Genes <- readxl::read_excel("Highlight_Genes_Subset.xlsx")
-Highlight_Genes <- Highlight_Genes[!is.na(Highlight_Genes$Ensembl_ID),]
-Highlight_Genes <- Highlight_Genes[!duplicated(Highlight_Genes$Gene_Name),]
 Highlight_Genes <- Highlight_Genes[order(Highlight_Genes$Ensembl_ID),]
 
 # Select L4/5 IT CTX and Sst DEA results
@@ -188,11 +186,6 @@ for (i in seq_along(ll)) {
   ll[[i]]$HighlightGenes[ll[[i]]$HighlightGenes==""] <- FALSE
   ll[[i]]$HighlightGenes[ll[[i]]$HighlightGenes!=FALSE] <- TRUE
 }
-
-
-df.DEG <- lapply(ll, function(x) x[x$FDR<0.05,])
-n.DEG <- lapply(df.DEG, function(x) length(rownames(x)))
-n.DEG.PosCtrls <- lapply(df.DEG, function(x) length(intersect(rownames(x), PosCtrls$Gene_ID)))
 
 p1 <- ggplot(data=ll[[1]], aes(x=logFC, y=-log10(PValue),col=Significance))+
   geom_point(size=1)+xlim(-5,5) + theme_classic(base_size = 7)+theme(legend.position="none")+
