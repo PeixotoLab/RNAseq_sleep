@@ -313,6 +313,7 @@ for (i in seq_along(label)) {
   hist(df.RUVs1[[i]]$PValue, xlab = "p-value", main=paste(label[i],sep=" "))
 }
 dev.off()
+                         
 # Negative binomial generalized model (GLM) on Pseudo-bulk sum ####
 # Aggregate across sample
 PseudoBulkSum <- aggregateAcrossCells(pseudo.bulk, use.assay.type = "counts", id=DataFrame(sample=pseudo.bulk$sample_id))
@@ -350,29 +351,15 @@ FDR <- as.data.frame(topTags(resRUVs1.Sum, n=length(rownames(PseudoBulkSum)))[,5
 df.RUVs1.Sum <- cbind(df.RUVs1.Sum, FDR)
 df.RUVs1.Sum <- df.RUVs1.Sum[order(df.RUVs1.Sum$FDR),]
 
-# Sort by genes to associate correctly the Up- and Down-regulated DGE 
-df.RUVs1.Sum <- lapply(df.RUVs1.Sum, function(u) u[order(rownames(u)),])
-
-# Identify the Up- and Down-regulated DGE 
-up.down.regulation <- as.data.frame(decideTests(resRUVs1.Sum))
-up.down.regulation$gene <- rownames(up.down.regulation)
-colnames(up.down.regulation) <- c("regulation","gene")
-up.down.regulation <- up.down.regulation[order(rownames(up.down.regulation)),]
-
-df.RUVs1.Sum$regulation <- up.down.regulation$regulation
-df.RUVs1.Sum$regulation[df.RUVs1.Sum$regulation=="-1"]<- "DOWN"
-df.RUVs1.Sum$regulation[df.RUVs1.Sum$regulation=="1"]<- "UP"
-df.RUVs1.Sum$regulation[df.RUVs1.Sum$regulation=="0"]<- "NO"
-
 n.genes <- length(rownames(df.RUVs1.Sum)) # N. of genes
 
 df.DEGs <- df.RUVs1.Sum[df.RUVs1.Sum$FDR<0.05,] # data.frame of DEGs results 
 n.DEGs <- length(rownames(df.DEGs)) # N. of DEGs
 
-df.UpDEGs <- df.RUVs1.Sum[df.RUVs1.Sum$regulation=="UP",]
+df.UpDEGs <- df.DEGs[df.DEGs$logFC>=0,]
 n.UpDEGs <-  length(rownames(df.UpDEGs)) # N. of DEGs 
 
-df.DownDEGs <- df.RUVs1.Sum[df.RUVs1.Sum$regulation=="DOWN",]
+df.DownDEGs <- df.DEGs[df.DEGs$logFC<0,]
 n.DownDEGs <-  length(rownames(df.DownDEGs)) # N. of DEGs 
 
 n.PosCtrls <- length(intersect(rownames(df.RUVs1.Sum), PosCtrls$Gene_ID)) # Intersection between dataset genes and positive controls
@@ -382,8 +369,3 @@ perc.DEGs.PosCtrls <- 100*round(n.DEGs.PosCtrls/n.PosCtrls,4) # Percetage of DEG
 n.FP <- length(intersect(rownames(df.RUVs1.Sum), DGE_Fishpond$Gene_Stable_ID)) # Intersection between dataset genes and DEGs from Fishpond
 n.DEGs.FP <- length(intersect(rownames(df.DEGs), DGE_Fishpond$Gene_Stable_ID)) # Intersection between dataset DEGs and DEGs from Fishpond
 perc.DEGs.FP <- 100*round(n.DEGs.FP/n.FP,4) # Percetage of DEGs Fishpond/ DEGs FP detected
-
-n.nuclei <- 47649
-
-#tab <- cbind(n.nuclei, as.matrix(n.genes), as.matrix(n.UpDEGs),as.matrix(n.DownDEGs), as.matrix(perc.DEGs.PosCtrls), as.matrix(perc.DEGs.FP))
-#colnames(tab) <- c("nuclei","genes","Up","Down","n.PosCtrls","nDEGsFP")
