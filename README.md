@@ -323,35 +323,64 @@ We save the combined `SingleCellExperiment` object at the gene-level as a `.RDS`
 - Helpful vignette: https://combine-lab.github.io/alevin-tutorial/2020/alevin-velocity/
 
 #### Data setting, quality control, normalization and doublets removal
-To analyze the data the UMI counts of exons and the introns with the same ensembl IDs were added up. To identify mitochondrial genes, mouse ensembl IDs were converted to chromosome identifier with the EnsDb.Mmusculus.v79 (v2.99.0) package. We split the data into six SingleCellExperiment objects, one for each mouse.
 
-For each sample, the Bioconductor scuttle (v1.8.4) package was used to detect low quality and damaged droplets. Particularly, the perCellQCMetrics function to calculate useful per-cell QC metrics: the sum of counts and the number of detected features. In this case, these statistics were computed also for mitochondrial genes. Then, we used the logNormCounts function of the scuttle package to apply the normalization factors and obtain the log-normalized counts.
+We added the UMI counts of spliced mRNA and introns sharing the same ensembl ID. To identify mitochondrial genes, we retrieve the chromosome location of each ensembl gene with the EnsDb.Mmusculus.v79 (v2.99.0) package. We split the data into six SingleCellExperiment objects, one for each mouse.
 
-Lastly, for each sample the doublets were removed with the scDblFinder (v1.12.0) package, using the computeDoubletDensity function to calculate the scores and the doubletThresholding function to set the doublet scores threshold with griffiths method.
+For each sample, we used the Bioconductor scuttle (v1.8.4) package to detect low quality and damaged droplets. Particularly, we computed per-cell quality-control metrics with the `perCellQCMetrics` function; these metrics include the sum of UMI counts, the number of detected genes, and the percentage of mitochondrial counts. Lastly, for each sample, we removed potential doublets with the scDblFinder (v1.12.0) package, using the `computeDoubletDensity` function to calculate the scores and the `doubletThresholding` function to set the doublet scores threshold with the *griffiths* method.
 
-#### Cell-type annotation
-To identify cell types we used the Allen Whole Cortex & Hippocampus - 10x genomics (v2021) as reference dataset (cite https://www.sciencedirect.com/science/article/pii/S0092867421005018). This dataset was imported by the loadHDF5SummarizedExperiment function of the HDF5Array (v1.26.0) package and was converted to a SingleCellExperiment object available at https://github.com/drighelli/AllenInstituteBrainData. 
-We then selected the “Non-Neuronal”, “Glutamatergic” and “GABAergic” clusters coming from the Visual Cortex (VIS, VISl, VISm, VISp) to annotate our dataset. For computational issues, we selected a random subset of 100,000 cortical cells.
+Code to reproduce this is located in the `1_DataPreprocessing.R` file from `02_analysis_snrnaseq` folder.
 
-Cell annotation was computed using two methods: Azimuth and SingleR. For the first method, the reference data was converted into a Seurat object and into a Azimuth compatible object, using the AzimuthReference function of the Azimuth (v0.4.6) package. Then query samples were merged and were converted into a Seurat object. Cell annotation was computed using the RunAzimuth function of the Azimuth package. The t-SNE and the UMAP projections were computed using the RunTSNE and RunUMAP functions of the Seurat (v 4.3.0) package with seed.use = 1.
+#### Cell annotation
 
-For the second method, the reference dataset was aggregated across groups of cell type and was normalized, using the aggregateAcrossCells and the logNormCounts functions of the scuttle (v1.8.4) package, and the gene symbols were converted to ensembl with the function getBM of the biomaRt (v2.54.0) package. Then, cell annotation was computed using the SingleR function of SingleR (v2.0.0) package.
+To identify cell types, we used the [Allen Whole Cortex & Hippocampus - 10x genomics (v2021)](https://www.sciencedirect.com/science/article/pii/S0092867421005018) as reference dataset. This dataset was imported by the `loadHDF5SummarizedExperiment` function of the HDF5Array (v1.26.0) package and was converted to a SingleCellExperiment object, which we made available [here](https://github.com/drighelli/AllenInstituteBrainData). We then selected the “Non-Neuronal”, “Glutamatergic” and “GABAergic” clusters coming from the Visual Cortex (VIS, VISl, VISm, VISp) to annotate our dataset. For computational issues, we selected a random subset of 100,000 cortical cells.
 
-For each side, to visualize the assigned labels in two dimensions, the t-SNE and the UMAP projections were computed using the DimPlot function of Seurat package, with option reduction = "integrated_dr”, where "integrated_dr” is the supervised principal component analysis obtained by the Azimuth method.
+Cell annotation was computed using two methods: Azimuth and SingleR. For the first method, the reference data was converted into a Seurat object and into a Azimuth compatible object, using the `AzimuthReference` function of the Azimuth (v0.4.6) package. Then query samples were merged and were converted into a Seurat object. Cell annotation was computed using the `RunAzimuth` function of the Azimuth package. The t-SNE and the UMAP embeddings were computed using the `RunTSNE` and `RunUMAP` functions of the Seurat (v 4.3.0) package with *seed.use = 1*.
 
-Also, a pseudo-bulk level Multidimensional Scaling (MDS) plot was created with the pbMDS function of muscat (v1.12.1) package. Each point represents one subpopulation-sample instance; points are colored by subpopulation and shaped by group ID.
+For the second method, the reference dataset was aggregated across groups of cell type and was normalized, using the `aggregateAcrossCells` and the `logNormCounts` functions of the scuttle (v1.8.4) package, and the gene symbols were converted to ensembl with the function `getBM` of the biomaRt (v2.54.0) package. Then, cell annotation was computed using the `SingleR` function of SingleR (v2.0.0) package.
+
+To visualize the assigned labels in two dimensions, the t-SNE and the UMAP embeddings were computed using the `DimPlot` function of the Seurat package, with option *reduction = “integrated_dr”*, where “integrated_dr” is the supervised principal component analysis obtained by the Azimuth method.
+
+Finally, a pseudo-bulk level Multidimensional Scaling (MDS) plot was created with the `pbMDS` function of muscat (v1.12.1) package. Each point represents one subpopulation-sample instance; points are colored by subpopulation and shaped by treatment.
+
+Code to reproduce the cell-type assignment is located in the `2_CellAnnotation.R` file from `02_analysis_snrnaseq` folder. Instead, code to reproduce the MDS plots is located in the `3_PseudoBulk_MDSplot.R` from the same folder.
+
+#### Cell-type annotation validation
+
+To evaluate the cell-type assignments, we visualized cell-type specific markers with a heatmap of the log-normalized count average in each group. We used the `pheatmap` function of the pheatmap (v1.0.12) package.
+
+As an additional quality control, we checked if there were cell-types with low proportion of intronic reads, as these could be a sign of RNA coming from cytoplasm (likely from cell debris) and assigned incorrectly to nuclei.  (cite [https://www.biorxiv.org/content/10.1101/2023.04.05.535689v1.full.pdf](https://www.biorxiv.org/content/10.1101/2023.04.05.535689v1.full.pdf))
+
+To identify the best cell annotation method, we used two datasets from the [BRAIN Initiative Cell Census atlas](https://www.nature.com/articles/s41586-021-03500-8) for which cells were already annotated: the [“10X Nuclei v3 Broad”](http://data.nemoarchive.org/biccn/lab/zeng/transcriptome/sncell/10x_v3/mouse/processed/analysis/10X_nuclei_v3_Broad/) and the [“10X Nuclei v2 AIBS”](http://data.nemoarchive.org/biccn/lab/zeng/transcriptome/sncell/10x_v2/mouse/processed/analysis/10X_nuclei_v2_AIBS/).
+
+We annotated these datasets using three methods: Azimuth, SingleR on log-normalized counts and SingleR on corrected data with the Mutual Nearest Neighbor (MNN) method, implemented in the `fastMNN` function of the batchelor (v1.14.1) package. We found that Azimuth was the best performing method on these already annotated datasets and hence chose this annotation for the subsequent analyses.
+
+Code to reproduce this is located in the `CellAnnotation_Validation.R` file from `02_analysis_snrnaseq` folder.
 
 #### Differential expression analysis
+
 For each neuronal cell-type with more than 500 cells, the differential gene expression analysis was carried out with two methods: a negative binomial generalized linear model (GLM) on pseudo-bulk samples and a negative binomial mixed effect model (NBMM) at the cell level.
 
-For the GLM model, we created the pseudo-bulk samples with the function aggregateAcrossCells of the scuttle package. In other words, we computed sum counts values for each feature across cell-type and mouse groups. We made a Remove Unwanted Variation (RUV) normalization with k=1 on each neuronal cell-type, using the RUVs function of the RUVSeq (v1.32.0) package. We used the negative control genes coming from microarray analysis to estimate the factor of unwanted variation. The 10% negative control genes were randomly selected. The remaining control genes were used to fit RUV normalization.
+For the GLM model, we created the pseudo-bulk samples with the function `aggregateAcrossCells` of the scuttle package. In other words, we computed sum counts values for each feature for each cell-type and mouse.
 
-To visualize the principal component analysis of RUV normalization, we used the plotPCA function of the EDASeq (v2.32.0) package.
+To account for latent confounders, we computed a factor of unwanted variation using the `RUVs` function of the RUVSeq (v1.32.0) package with k=1 and using as negative control genes a list of genes previously characterized as non-differential in sleep deprivation in a large microarray meta-analysis, avaible [here](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3065-8). Specifically, 10% of negative control genes were randomly selected to be used for evaluation and  the remaining control genes were used to fit RUV normalization. 
 
-We then used the Bioconductor edgeR (v3.40.2) package. Before the differential gene expression analysis, the genes were filtered with the function filterByExpr (with default parameters). The factor of unwanted variation was added in the design matrix. The differential gene expression analysis was computed with the function glmLRT by specifying “SD-HC” (Sleep Deprived vs Home Cage Control) as contrast and offset term equal to zero.
+We then used the Bioconductor edgeR (v3.40.2) package to perform differential expression after filtering the lowly expressed genes with the `filterByExpr` function (with default parameters). The factor of unwanted variation was added in the design matrix. The differential gene expression analysis was computed with the function glmLRT by specifying “SD-HC” (Sleep Deprived vs Home Cage Control) as contrast and offset term equal to zero, since normalization was already carried out by the RUV factor. We used the Benjamini-Hochberg procedure to control for the false discovery rate (FDR), i.e., we considered as differentially expressed those genes that had an adjusted p-value less than 5%.
 
-The negative binomial mixed effect model was computed with the function mmDS of the muscat (v1.12.1) package with option method=”nbinom”.
+As an alternative method, we fitted a negative binomial mixed effect model using the `mmDS` function of the muscat (v1.12.1) package with *method = “nbinom”*.
 
-To visualize the differential expressed genes the volcano plot was made for each cell type and each model, using the ggplot2 (v3.3.6) package. Also, the p-value histogram was made for each cell-type and model, to check if the distribution was uniformly distributed between 0 and 1.
+We visualized differentially expressed genes in a volcano plot for each cell type and each model and assess the model’s goodness-of-fit by visualizing the p-value histograms. Finally, we used the negative and positive controls defined in the ‘Bulk genome-wide gene expression (RNA-seq)’ section to evaluate the concordance between the bulk and single-nuclear differential expression results.
 
-We used the negative and positive controls defined in the ‘Bulk genome-wide gene expression (RNA-seq)’ section to evaluate the concordance between the bulk and single-nuclear differential expression results.
+Code to reproduce the differential expression analysis is located in the `4_DifferentialExpressionAnalysis.R` file from `02_analysis_snrnaseq` folder.
+
+For Glutamatergic and GABAergic neurons, we used the `upset` function of the UpSetR (v1.4.0) package to compare the lists of differential expressed genes for each cell-type. In particular, we compared the differential expressed genes coming from bulk analysis. (We used the intersection between the DE and DGE bulk).
+
+Code to reproduce the upset plot is located in the `5_UpSetPlot.R` file from `02_analysis_snrnaseq` folder.
+
+To reproduce the figures in the analysis, please navigate to `02_analysis_snrnaseq`. Below is a summary of what code was used to reproduce figures in the paper:
+
+- Figure 4A and Figure 4 Supplement 2 were generated with `2_CellAnnotation.R` 
+- Figure1B and C, Figure 4 Supplement 4 were generated with `3_PseudoBulk_MDSplot.R`
+- Figure 4 Supplement 1 and 3 were generated with `CellAnnotation_Validation.R`
+- Figure 5B and C, Figure 5 Supplement 1  were generated with `4_DifferentialExpressionAnalysis.R`
+- Figure 6A and B  were generated with `5_UpSetPlot.R`
+
