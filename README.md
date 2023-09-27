@@ -223,8 +223,8 @@ Differential expression analysis of inferential replicate counts was carried out
 To reproduce other figures in the analysis, please navigate to `02_analysis_bulk` then `02_plots`. Below is a summary of what code was used to reproduce figures in the paper that were not generated using the Fisphond DE code:
 
 - Figure 1C and D were generated with `01_Venn_Diagrams_DTE_DGE.R` and `02_IntersectingHighlightGenes_with_VennDiagrams.R`
-- Figure 1 Supplement 2 was generated with `03_Eif_Plots.R`
-- Figure 2B and C were generated with `04_InteractionPlots.R`
+- Figure 1 Extended Data Figure was generated with `03_Eif_Plots.R`
+- Figure 2B and C were generated with `04_Interaction_and_Bar_Plots.R`
 - Figure 3 was generated with `05_Bubble_Plot_Code.R`
 
 ### snRNA-seq 
