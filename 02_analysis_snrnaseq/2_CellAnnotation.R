@@ -1,12 +1,13 @@
+# Cell-types annotation ####
+# The goal of this analysis is to identify cell types,
+# using an automantic and reference-based method, Azimuth.
+
+# Set up
 library(SingleCellExperiment)
 library(scuttle)
 library(HDF5Array)
 library(dplyr)
 library(Seurat)
-
-#devtools::install_github("satijalab/seurat-data")
-#devtools::install_github("satijalab/azimuth", ref = "release/0.4.6")
-
 library(Azimuth)
 library(SeuratData)
 library(ggplot2)
@@ -15,181 +16,146 @@ library(SingleR)
 library(pheatmap)
 
 # Reference dataset ####
-# We used Allen Whole Cortex & Hippocampus - 10x genomics (v 2021) as reference dataset for cell annotation
-reference <- loadHDF5SummarizedExperiment(dir="/mnt/callisto/Zuin", prefix="Allen_mm_21")
+# We used Allen Whole Cortex & Hippocampus - 10x genomics (v 2021)
+# as reference dataset for cell-type assignment.
+reference <- loadHDF5SummarizedExperiment(dir = "/mnt/callisto/Zuin", 
+                                          prefix = "Allen_mm_21")
 reference <- as(reference, "SingleCellExperiment")
 names(assays(reference)) <- c("counts")
 
-# We selected Non-Neuronal, Neurons Glutamatergic and Neurons GABA-ergic, coming from Visual cortex (VIS, VISl, VISm, VISp) region
-reference <- reference[,c(reference$region_label=="VIS"|reference$region_label=="VISl"|reference$region_label=="VISm"|
-                            reference$region_label=="VISp")]
-reference <- reference[,!is.na(reference$subclass_label) & reference$subclass_label!=""]
-reference <- reference[,-which(grepl("ENT", reference$subclass_label))]
-reference <- reference[,-which(grepl("PPP", reference$subclass_label))]
-reference <- reference[,-which(grepl("CR", reference$subclass_label))]
-reference <- reference[,-which(grepl("Meis", reference$subclass_label))]
-reference <- reference[,-which(grepl("SUB", reference$subclass_label))]
+# NOTE: This code will modify with AllenInstituteBrainData package.
 
-# For computational issues, we decided to select 100000 cortical random cells.
-# We selected cell type with less 100 cells. These weren't randomly selected.
-no.random <- reference[,c(reference$subclass_label=="SMC-Peri"|reference$subclass_label=="VLMC")]
+# We selected Non-Neuronal, Neurons Glutamatergic and Neurons GABA-ergic,
+# coming from Visual cortex (VIS, VISl, VISm, VISp) region
+reference <- reference[, c(reference$region_label == "VIS" |
+                             reference$region_label == "VISl" |
+                             reference$region_label == "VISm" |
+                             reference$region_label == "VISp")]
+reference <- reference[, !is.na(reference$subclass_label) & reference$subclass_label != ""]
+reference <- reference[, -which(grepl("ENT", reference$subclass_label))]
+reference <- reference[, -which(grepl("PPP", reference$subclass_label))]
+reference <- reference[, -which(grepl("CR", reference$subclass_label))]
+reference <- reference[, -which(grepl("Meis", reference$subclass_label))]
+reference <- reference[, -which(grepl("SUB", reference$subclass_label))]
 
-# Cell type with more 100 cells were selected
-reference <- reference[,!c(reference$subclass_label=="SMC-Peri"|reference$subclass_label=="VLMC")]
+# For computational issues, we decided to select 100,000 cortical random cells.
+# First, all cell was selected from the cell types with less than 100 cells.
+no_random <- reference[, c(reference$subclass_label == "SMC-Peri" | 
+                             reference$subclass_label == "VLMC")]
+
+# The resting cell types were selected.
+reference <- reference[, !c(reference$subclass_label == "SMC-Peri" | 
+                              reference$subclass_label == "VLMC")]
 
 df <- data.frame(colData(reference))
-# We randomly selected 100 cells for each cell type
+# First, we randomly selected 100 cells for each cell type.
 set.seed(23)
-random <- df %>% group_by(subclass_label) %>% slice_sample(n=100)
-random100 <- reference[,colnames(reference) %in% random$sample_name]
+random <- df %>% group_by(subclass_label) %>% slice_sample(n = 100)
+random100 <- reference[, colnames(reference) %in% random$sample_name]
 
-reference <- reference[,!(colnames(reference) %in% random$sample_name)]
+reference <- reference[, !(colnames(reference) %in% random$sample_name)]
 
-# We randomly selected 98100 cells for each cell type
+# Then, we randomly selected 98046 of the resting cells
 set.seed(23)
-reference <- reference[,sample(colnames(reference), 98046)]
+reference <- reference[, sample(colnames(reference), 98046)]
 
-reference <- cbind(reference, random100, no.random)
+reference <- cbind(reference, random100, no_random)
 
 # Cell Annotation with Azimuth ####
-# The reference dataset was converted into Seurat object
+# The reference dataset was converted into an Azimuth-compatible object
+# for cell-type assignment.
+# First, the reference dataset was converted into Seurat object
 counts <- as.matrix(counts(reference))
-colData <- colData(reference)
-reference.so <- CreateSeuratObject(counts = counts, meta.data = data.frame(colData))
+coldata <- colData(reference)
+reference_so <- CreateSeuratObject(counts = counts,
+                                   meta.data = data.frame(coldata))
 
 # And we created a compatible object for Azimuth cell annotation
-referenceSC <- SCTransform(reference.so,assay = "RNA", new.assay.name = "SCT", variable.features.n = 2000,
-                           verbose = TRUE,conserve.memory=TRUE) # conserve.memory=TRUE for large dataset (no crash R)
-referenceSC <- RunPCA(referenceSC, assay = "SCT", npcs = 50, verbose = FALSE, reduction.name = "PCA", return.model=TRUE) # Number of PCs must be 50 
-referenceSC <- RunUMAP(referenceSC, assay = "SCT", reduction = "PCA", dims = seq_len(50), seed.use = 1, verbose = FALSE,
-                       reduction.name = "umap",return.model=TRUE) # "umap" because not read
-referenceSC$subclass_label <- as.factor(referenceSC$subclass_label)
-Idents(object = referenceSC) <- "subclass_label"
+reference_so <- SCTransform(reference_so, assay = "RNA", new.assay.name = "SCT",
+                            variable.features.n = 2000, verbose = TRUE,
+                            conserve.memory = TRUE)
+reference_so <- RunPCA(reference_so, assay = "SCT", npcs = 50, verbose = FALSE,
+                       reduction.name = "PCA", return.model = TRUE)
+reference_so <- RunUMAP(reference_so, assay = "SCT", reduction = "PCA",
+                        dims = seq_len(50), seed.use = 1, verbose = FALSE,
+                        reduction.name = "umap", return.model = TRUE)
 
-reference.azimuth <- AzimuthReference(referenceSC, refUMAP = "umap", refDR = "PCA", refAssay = "SCT", dims = 1:50, 
-                                      metadata = c("subclass_label"), verbose = TRUE)
+reference_so$subclass_label <- as.factor(reference_so$subclass_label)
+Idents(object = reference_so) <- "subclass_label"
+
+# Azimuth-compatible object
+reference_azimuth <- AzimuthReference(reference_so, refUMAP = "umap",
+                                      refDR = "PCA", refAssay = "SCT",
+                                      dims = 1:50, metadata = c("subclass_label"),
+                                      verbose = TRUE)
+
 # save reference in a folder called "reference"
-ref.dir <- "reference/"
-SaveAnnoyIndex(object = reference.azimuth[["refdr.annoy.neighbors"]], file = file.path(ref.dir, "idx.annoy"))
-saveRDS(object = reference.azimuth, file = file.path(ref.dir, "ref.Rds"))
+ref_dir <- "reference/"
+SaveAnnoyIndex(object = reference_azimuth[["refdr.annoy.neighbors"]], 
+               file = file.path(ref_dir, "idx.annoy"))
+saveRDS(object = reference_azimuth, file = file.path(ref_dir, "ref.Rds"))
 
-# Query dataset 
-sce.obj <- readRDS("snRNA_DataPreprocessing.rds")
-# The samples were merged and were converted into a Seurat object
-counts <- cbind(counts(sce.obj[[1]]),counts(sce.obj[[2]]),counts(sce.obj[[3]]),counts(sce.obj[[4]]),counts(sce.obj[[5]]),counts(sce.obj[[6]]))
+# Load single-nuclear dataset after pre-processing
+scelist_sgl <- readRDS("snrna_scelist_sgl.rds")
+# The six SingleCellExperiment were combined and converted into a Seurat object.
+counts <- cbind(counts(scelist_sgl[[1]]), counts(scelist_sgl[[2]]),
+                counts(scelist_sgl[[3]]), counts(scelist_sgl[[4]]), 
+                counts(scelist_sgl[[5]]), counts(scelist_sgl[[6]]))
 
-sample_id <- c(sce.obj[[1]]$sample_id, sce.obj[[2]]$sample_id, sce.obj[[3]]$sample_id, sce.obj[[4]]$sample_id, 
-               sce.obj[[5]]$sample_id, sce.obj[[6]]$sample_id)
+sample_id <- c(scelist_sgl[[1]]$sample_id, scelist_sgl[[2]]$sample_id, 
+               scelist_sgl[[3]]$sample_id, scelist_sgl[[4]]$sample_id, 
+               scelist_sgl[[5]]$sample_id, scelist_sgl[[6]]$sample_id)
 
-condition <- c(sce.obj[[1]]$condition, sce.obj[[2]]$condition, sce.obj[[3]]$condition, sce.obj[[4]]$condition, 
-               sce.obj[[5]]$condition, sce.obj[[6]]$condition)
+condition <- c(scelist_sgl[[1]]$condition, scelist_sgl[[2]]$condition, 
+               scelist_sgl[[3]]$condition, scelist_sgl[[4]]$condition, 
+               scelist_sgl[[5]]$condition, scelist_sgl[[6]]$condition)
 
-sce.obj <-  SingleCellExperiment(assays=list(counts=counts))
-sce.obj$sample_id <- sample_id
-sce.obj$condition <- condition
-colnames(sce.obj) <- paste(colnames(sce.obj), sce.obj$sample_id, sep="_")
+sce_obj <-  SingleCellExperiment(assays = list(counts = counts))
+sce_obj$sample_id <- sample_id
+sce_obj$condition <- condition
+colnames(sce_obj) <- paste(colnames(sce_obj), sce_obj$sample_id, sep = "_")
 
-# Dataset was converted into a Seurat object
-seurat.obj <- CreateSeuratObject(counts = counts(sce.obj), meta.data = data.frame(colData(sce.obj)), project = "SD")
+# SCE object was converted into a Seurat object
+seurat_obj <- CreateSeuratObject(counts = counts(sce_obj), 
+                                 meta.data = data.frame(colData(sce_obj)))
 
-# Cell annotation with RunAzimuth on all cells
-seurat.obj <- RunAzimuth(seurat.obj, reference = "reference/")
+# Cell-type annotation with Azimuth
+seurat_obj <- RunAzimuth(seurat_obj, reference = "reference/")
 
-# Projections 
-seurat.obj <- RunTSNE(seurat.obj, reduction = "integrated_dr", dims = seq_len(20),
-                      seed.use = 1, do.fast = TRUE, verbose = FALSE, reduction.name = "TSNE")
+# Dimensional riduction
+seurat_obj <- RunTSNE(seurat_obj, reduction = "integrated_dr", 
+                      dims = seq_len(20), seed.use = 1, do.fast = TRUE, 
+                      verbose = FALSE, reduction.name = "TSNE")
 
-seurat.obj <- RunUMAP(seurat.obj, reduction = "integrated_dr", dims = seq_len(20),
-                      seed.use = 1, verbose = FALSE, reduction.name = "UMAP")
+seurat_obj <- RunUMAP(seurat_obj, reduction = "integrated_dr", 
+                      dims = seq_len(20), seed.use = 1, verbose = FALSE,
+                      reduction.name = "UMAP")
 
-# Cell Annotation with SingleR ####
-# For SingleR cell annotation the reference dataset was aggregated across groups of cell type and was normalized.
-aggregref <- aggregateAcrossCells(reference, use.assay.type = "counts",id=DataFrame(label=reference$subclass_label))
-aggregref <- logNormCounts(aggregref)
+# Visualization
+load("AllenColorLabel.RData")
 
-# Symbol was converted to ensembl
-ensembl.biomaRt <- useEnsembl(biomart = "genes", dataset = "mmusculus_gene_ensembl")
-symbol.allen <- rownames(aggregref)
+p <- DimPlot(seurat_obj, reduction = "TSNE", group.by = "predicted.subclass_label") +
+  NoLegend() + labs(x = "TSNE1", y = "TSNE2") + ggtitle("") +
+  scale_color_manual(values = subclass_color)
+p <- LabelClusters(p, id = "predicted.subclass_label",  fontface = "bold", color = "black", size = 5)
+ggsave(p, file = "snRNA_TSNEplot_Azimuth_NoLegend.pdf", width = 20, height = 20, units = "cm")
 
-ensembl.id <- getBM(attributes=c('external_gene_name','ensembl_gene_id'), 
-                    filters = 'external_gene_name', values = symbol.allen, mart = ensembl.biomaRt)
-ensembl.id <- ensembl.id[!duplicated(ensembl.id$external_gene_name),] # remove duplicated symbol genes
+p1 <- DimPlot(seurat.obj, reduction = "UMAP", group.by = "predicted.subclass_label")+
+  NoLegend() + labs(x = "UMAP1", y="UMAP2") + ggtitle("") + 
+  scale_color_manual(values=subclass.color)
+p1 <- LabelClusters(p1, id = "predicted.subclass_label",  fontface = "bold", color = "black", size=2)
+p1 <- p1 + theme(axis.text=element_text(size=7), axis.title=element_text(size=7))
 
-inters <- intersect(rownames(aggregref), ensembl.id$external_gene_name)
-ensembl.id <- ensembl.id[ensembl.id$external_gene_name %in% inters,]
-ensembl.id <- ensembl.id[order(ensembl.id$external_gene_name),]
-
-aggregref <- aggregref[rownames(aggregref) %in% inters,]
-aggregref <- aggregref[order(rownames(aggregref)),]
-rowData(aggregref)$ensembl_id <- ensembl.id$ensembl_gene_id
-rownames(aggregref) <- ensembl.id$ensembl_gene_id
-
-# Normalized SCE data
-sce.obj <- logNormCounts(sce.obj)
-
-pred.SigleR <- SingleR(sce.obj, ref=aggregref, labels=aggregref$subclass_label)
-
-# Save SingleR results into Seurat object for visualization
-seurat.obj$predicted.SingleR <- pred.SingleR$labels
-
-# Save cell-type annotation results into SingleCellExperiment object
-sce.obj$Azimuth.labels <- seurat.obj$predicted.subclass_label
-sce.obj$SingleR.labels <- pred.SigleR$labels
-
-# Visualization with t-SNE plot and UMAP plot####
-# Palette color creation 
-allen.color <- data.frame(aggregref$subclass_label, aggregref$subclass_color, aggregref$class_label)
-colnames(allen.color) <- c("Label", "color","class")
-
-# change Astro color
-allen.color$color[allen.color$color=="#665C47"] <- "#957b46"
-# change Oligo color
-allen.color$color[allen.color$color=="#53776C"] <- "#744700"
-# change SMC-Peri color
-allen.color$color[allen.color$color=="#807059"] <- "#4c1130"
-# change VLMC color
-allen.color$color[allen.color$color=="#697255"] <- "#a9bd4f"
-# change Endo color
-allen.color$color[allen.color$color=="#8D6C62"] <- "#c95f3f"
-# change Sncg color 
-allen.color$color[allen.color$color=="#D3408D"] <- "#ffff00"
-
-subclass.color <- allen.color$color
-names(subclass.color) <- allen.color$Label
-
-# save Allen color labels: 
-save(subclass.color, file = "AllenColorLabel.RData")
-
-# Azimuth
-plot.so <- DimPlot(seurat.obj, reduction = "TSNE", group.by = "predicted.subclass_label", pt.size=0.5)+ 
-  NoLegend()+ labs(x = "TSNE1", y="TSNE2") + ggtitle("") + scale_color_manual(values=subclass.color)
-plot.so <- LabelClusters(plot.so, id = "predicted.subclass_label",  fontface = "bold", color = "black", size=5)
-ggsave(plot.so, file=paste("snRNA_TSNEplot_Azimuth_NoLegend.pdf",sep = ""), width = 20, height = 20, units = "cm")
-
-plot.so <- DimPlot(seurat.obj, reduction = "UMAP", group.by = "predicted.subclass_label", pt.size=0.5)+
-  NoLegend()+ labs(x = "UMAP1", y="UMAP2") + ggtitle("") + scale_color_manual(values=subclass.color)
-plot.so <- LabelClusters(plot.so, id = "predicted.subclass_label",  fontface = "bold", color = "black", size=5)
-ggsave(plot.so, file=paste("snRNA_UMAPplot_Azimuth_NoLegend.pdf",sep = ""), width = 20, height = 20, units = "cm")
-
-# SingleR
-plot.so <- DimPlot(seurat.obj, reduction = "TSNE", group.by = "predicted.SingleR", pt.size=0.5)+
-  NoLegend()+ labs(x = "TSNE1", y="TSNE2") + ggtitle("") + scale_color_manual(values=subclass.color)
-plot.so <- LabelClusters(plot.so, id = "predicted.SingleR",  fontface = "bold", color = "black", size=5)
-ggsave(plot.so, file=paste("snRNA_TSNEplot_SingleR_NoLegend.pdf",sep = ""), width = 20, height = 20, units = "cm")
-
-plot.so <- DimPlot(seurat.obj, reduction = "UMAP", group.by = "predicted.SingleR", pt.size=0.5)+
-  NoLegend()+ labs(x = "UMAP1", y="UMAP2") + ggtitle("") + scale_color_manual(values=subclass.color)
-plot.so <- LabelClusters(plot.so, id = "predicted.SingleR",  fontface = "bold", color = "black", size=5)
-ggsave(plot.so, file=paste("snRNA_UMAPplot_SingleR_NoLegend.pdf",sep = ""), width = 20, height = 20, units = "cm")
+ggsave("Peixoto_Figure4_part1.jpg",  width = 10, height = 10, units = "cm")
+ggsave("Peixoto_Figure4_part1.pdf",  width = 10, height = 10, units = "cm")
 
 # Save objects ####
-# We save a SingleCellExperimet object with all genes for differential expression analysis
-saveRDS(sce.obj, file = "snRNA_SCE_CellAnnotation.rds")
+# The SingleCellExperiment object with Azimuth labels was saved
+sce_obj$azimuth_labels <- seurat_obj$predicted.subclass_label
+saveRDS(sce_obj, file = "snrna_sce_annot.rds")
 
-# We save Seurat object for visualization
-saveRDS(seurat.obj, file = "snRNA_Seurat_CellAnnotation.rds")
+# The Seurat object with Azimuth was saved
+saveRDS(seurat_obj, file = "snrna_seurat_annot.rds")
 
-# We save reference with 100000 random cells from Visual Cortex and aggregated reference
-save(aggregref, file = "Allen_aggregref.RData")
+# The reference dataset, randomly selected was saved
 saveRDS(reference, file = "Allen_MMv21_VIS.rds")
-
