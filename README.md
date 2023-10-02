@@ -210,7 +210,7 @@ We save the `SummarizedExperiment` object at the transcript level (and gene leve
 
 #### Differential expression analysis
 
-Differential expression analysis of inferential replicate counts was carried out with a nonparametric model, using the Swish method from the Fishpond (v.2.4.1) package. Differential gene expression, differential transcript expression and differential transcript usage analysis is summarized below. Code to reproduce this is located in the `02_analysis_bulk` folder:
+Differential expression analysis of inferential replicate counts was carried out with a nonparametric model, using the Swish method from the Fishpond (v.2.4.1) package. Differential gene expression, differential transcript expression and differential transcript usage analysis is summarized below. Code to reproduce this is located in the `02_analysis_bulk` folder, and is separated by the respective analysis:
 
 **Differential gene expression:** Following data import, transcript quantifications were summarized to the gene level using the `summarizeToGene` function from the tximeta (v.1.16.1) package. Inferential replicates were scaled to the mean sequencing depth using the `scaleInfReps` function and filtered using the `labelKeep` function so that only genes with a minimum of 10 counts across 3 replicates remained. To obtain the estimated factors of unwanted variation, the counts matrix was extracted from the `SummarizedExperiment` object. As the counts matrix was not previously normalized to account for variations in sequencing depth, the EDAseq (v.2.32.0) package was loaded, and the `betweenLaneNormalization` function was used to normalize the counts via the upper-quartile (UQ) method. Following UQ normalization, the RUVseq (v. 1.32.0) package was loaded and the `RUVs` function was used to obtain `s$W` (the estimation of batch factors). Note, that for gene level analysis, a set of negative controls obtained from Gerstner et al. (2016) were used as the `cIdx` during `RUVs` and `k=4` was used. To account for continuous variation across the inferential replicates, the limma (v.3.54.2) package was loaded, and `removeBatchEffect` was used. `Swish` was then performed and 8,505 differentially expressed genes were detected. In addition to the negative controls obtained from Gerstner et al. (2016), a set of 675 positive control genes known to be affected by sleep deprivation were obtained and 83.15% were recovered of the 671 genes present in our expressed matrix. 
 
@@ -218,14 +218,17 @@ Differential expression analysis of inferential replicate counts was carried out
 
 **Differential transcript usage:** During differential transcript expression analysis, it was discovered that genes had transcripts that were upregulated and downregulated by sleep deprivation. To see how the proportion of transcripts changed between conditions, `isoformProportions` from the was Fishpond package was used prior to `Swish` and after accounting for continuous variables. Briefly, `isoformProportions` took the scaled and filtered counts returned the proportions relative to that gene. If a gene only has one transcript, that transcript is removed from analysis during `isoformProportions`.
 
+Unique to differential transcript usage analysis, an additional filter requiring all transcripts to have log10mean > 1 was implemented, immediately following the `label keep` function within the Fishpond package. Please see Extended Data Figure 10 for more information regarding this particular threshold. 
+
 -	Our code was adapted from this helpful tutorial: https://bioconductor.org/packages/release/bioc/vignettes/fishpond/inst/doc/swish.html#Differential_transcript_expression
 
 To reproduce other figures in the analysis, please navigate to `02_analysis_bulk` then `02_plots`. Below is a summary of what code was used to reproduce figures in the paper that were not generated using the Fisphond DE code:
 
-- Figure 1C and D were generated with `01_Venn_Diagrams_DTE_DGE.R` and `02_IntersectingHighlightGenes_with_VennDiagrams.R`
-- Figure 1 Extended Data Figure was generated with `03_Eif_Plots.R`
-- Figure 2B and C were generated with `04_Bar_and_Interaction_Plots.R`
-- Figure 3 was generated with `05_Bubble_Plot_Code.R`
+- Figure 4C and D were generated with `01_Venn_Diagrams_DTE_DGE.R` and `02.1_Intersect_DTE_DGE_Lists_Log2FC_Cutoff_Highlight_Genes.R`
+- Extended Data Figure 9 was generated with `03_Eif_Plots.R`
+- Extended Data Figure 10 was generated with `02.2_Intersect_DTE_DGE_Lists_log10mean_Cutoff.R`
+- Figure 5 was generated with `04_Bar_and_Interaction_Plots.R`
+- Figure 6 was generated with `05_Bubble_Plot_Code.R`
 
 ### snRNA-seq 
 
