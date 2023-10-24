@@ -22,13 +22,13 @@ setwd("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta")
 #### READ LISTS ####
 # Read lists without a fold change cutoff
 # Gene
-Gene <- readxl::read_excel("060123_Peixoto_Figure1_Supplement2.xlsx", sheet = "DGE")
+Gene <- readxl::read_excel("Peixoto_Figure_5_Supplementary_Table_1.xlsx", sheet = "DGE")
 
 dim(Gene)
 # [1] 8505    8
 
 # Transcript Expression
-Transcript <- readxl::read_excel("060123_Peixoto_Figure1_Supplement2.xlsx", sheet = "DTE")
+Transcript <- readxl::read_excel("Peixoto_Figure_5_Supplementary_Table_1.xlsx", sheet = "DTE")
 
 dim(Transcript)
 # [1] 15525    10
