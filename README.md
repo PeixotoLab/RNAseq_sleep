@@ -381,9 +381,9 @@ Code to reproduce the upset plot is located in the `5_UpSetPlot.R` file from `02
 
 To reproduce the figures in the analysis, please navigate to `02_analysis_snrnaseq`. Below is a summary of what code was used to reproduce figures in the paper:
 
-- Figure 4A and Figure 4 Supplement 2 were generated with `2_CellAnnotation.R` 
-- Figure1B and C, Figure 4 Supplement 4 were generated with `3_PseudoBulk_MDSplot.R`
-- Figure 4 Supplement 1 and 3 were generated with `CellAnnotation_Validation.R`
-- Figure 5B and C, Figure 5 Supplement 1  were generated with `4_DifferentialExpressionAnalysis.R`
-- Figure 6A and B  were generated with `5_UpSetPlot.R`
+- Figure 1A and Extended Data Figure 2 were generated with `2_CellAnnotation.R` 
+- Figure 1B and C, and Extended Data Figure 3 were generated with `3_PseudoBulk_MDSplot.R`
+- Extended Data Figure 1 was generated with `CellAnnotation_Validation.R`
+- Figure 2B and C, Figure 2 Supplementary Table 1 were generated with `4_DifferentialExpressionAnalysis.R`
+- Figure 4A was generated with `5_UpSetPlot.R`
 
