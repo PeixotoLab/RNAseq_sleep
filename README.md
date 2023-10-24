@@ -224,11 +224,11 @@ Unique to differential transcript usage analysis, an additional filter requiring
 
 To reproduce other figures in the analysis, please navigate to `02_analysis_bulk` then `02_plots`. Below is a summary of what code was used to reproduce figures in the paper that were not generated using the Fisphond DE code:
 
-- Figure 4C and D were generated with `01_Venn_Diagrams_DTE_DGE.R` and `02.1_Intersect_DTE_DGE_Lists_Log2FC_Cutoff_Highlight_Genes.R`
-- Extended Data Figure 9 was generated with `03_Eif_Plots.R`
+- Figure 5C and D were generated with `01_Venn_Diagrams_DTE_DGE.R` and `02.1_Intersect_DTE_DGE_Lists_Log2FC_Cutoff_Highlight_Genes.R`
+- Extended Data Figure 9E was generated with `03_Eif_Plots.R`
 - Extended Data Figure 10 was generated with `02.2_Intersect_DTE_DGE_Lists_log10mean_Cutoff.R`
-- Figure 5 was generated with `04_Bar_and_Interaction_Plots.R`
-- Figure 6 was generated with `05_Bubble_Plot_Code.R`
+- Figure 6 was generated with `04_Bar_and_Interaction_Plots.R`
+- Figure 7 was generated with `05_Bubble_Plot_Code.R`
 
 ### snRNA-seq 
 
