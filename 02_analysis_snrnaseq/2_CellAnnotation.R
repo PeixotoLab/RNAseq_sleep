@@ -13,17 +13,14 @@ library(SeuratData)
 library(ggplot2)
 library(biomaRt)
 library(SingleR)
-library(pheatmap)
+library(heatmap)
+library(AllenInstituteBrainData)
 
 # Reference dataset ####
 # We used Allen Whole Cortex & Hippocampus - 10x genomics (v 2021)
 # as reference dataset for cell-type assignment.
-reference <- loadHDF5SummarizedExperiment(dir = "/mnt/callisto/Zuin", 
-                                          prefix = "Allen_mm_21")
-reference <- as(reference, "SingleCellExperiment")
-names(assays(reference)) <- c("counts")
-
-# NOTE: This code will modify with AllenInstituteBrainData package.
+reference <- AllenInstituteBrainData("Allen_Mouse_2021")
+rownames(reference) <- rowData(reference)$X
 
 # We selected Non-Neuronal, Neurons Glutamatergic and Neurons GABA-ergic,
 # coming from Visual cortex (VIS, VISl, VISm, VISp) region
