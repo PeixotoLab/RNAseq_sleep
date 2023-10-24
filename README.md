@@ -218,15 +218,15 @@ Differential expression analysis of inferential replicate counts was carried out
 
 **Differential transcript usage:** During differential transcript expression analysis, it was discovered that genes had transcripts that were upregulated and downregulated by sleep deprivation. To see how the proportion of transcripts changed between conditions, `isoformProportions` from the was Fishpond package was used prior to `Swish` and after accounting for continuous variables. Briefly, `isoformProportions` took the scaled and filtered counts returned the proportions relative to that gene. If a gene only has one transcript, that transcript is removed from analysis during `isoformProportions`.
 
-Unique to differential transcript usage analysis, an additional filter requiring all transcripts to have log10mean > 1 was implemented, immediately following the `label keep` function within the Fishpond package. Please see Extended Data Figure 10 for more information regarding this particular threshold. 
+Unique to differential transcript usage analysis, an additional filter requiring all transcripts to have log10mean > 1 was implemented, immediately following the `label keep` function within the Fishpond package. Please see Extended Data Figure 9 for more information regarding this particular threshold. 
 
 -	Our code was adapted from this helpful tutorial: https://bioconductor.org/packages/release/bioc/vignettes/fishpond/inst/doc/swish.html#Differential_transcript_expression
 
 To reproduce other figures in the analysis, please navigate to `02_analysis_bulk` then `02_plots`. Below is a summary of what code was used to reproduce figures in the paper that were not generated using the Fisphond DE code:
 
 - Figure 5C and D were generated with `01_Venn_Diagrams_DTE_DGE.R` and `02.1_Intersect_DTE_DGE_Lists_Log2FC_Cutoff_Highlight_Genes.R`
-- Extended Data Figure 9E was generated with `03_Eif_Plots.R`
-- Extended Data Figure 10 was generated with `02.1_Intersect_DTE_DGE_Lists_Log2FC_Cutoff_Highlight_Genes.R` `02.2_Intersect_DTE_DGE_Lists_log10mean_Cutoff.R`
+- Extended Data Figure 8E was generated with `03_Eif_Plots.R`
+- Extended Data Figure 9 was generated with `02.1_Intersect_DTE_DGE_Lists_Log2FC_Cutoff_Highlight_Genes.R` `02.2_Intersect_DTE_DGE_Lists_log10mean_Cutoff.R`
 - Figure 6 was generated with `04_Bar_and_Interaction_Plots.R`
 - Figure 7 was generated with `05_Bubble_Plot_Code.R`
 
