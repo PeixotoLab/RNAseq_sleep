@@ -8,8 +8,8 @@ library(ggplot2) # Version 3.4.2 (For making plots)
 setwd("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta")
 
 #### Read Gene/Transcript Lists ####
-DGE <- readxl::read_excel("060123_Peixoto_Figure1_Supplement2.xlsx", sheet = "DGE")
-DTE <- readxl::read_excel("060123_Peixoto_Figure1_Supplement2.xlsx", sheet = "DTE")
+DGE <- readxl::read_excel("Peixoto_Figure_5_Supplementary_Table_1.xlsx", sheet = "DGE")
+DTE <- readxl::read_excel("Peixoto_Figure_5_Supplementary_Table_1.xlsx", sheet = "DTE")
 
 #### Subset matrices so that only Eifs remain ####
 # DGE
