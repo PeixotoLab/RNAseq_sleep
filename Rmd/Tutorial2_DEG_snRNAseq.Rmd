@@ -1,0 +1,436 @@
+---
+title: "A Global Transcriptional Atlas of the Effect of Sleep Loss in the Mouse Cortex"
+font_size: 12pt
+output: pdf_document
+toc: TRUE
+date: ""
+#bibliography: biblio.bib
+link-ciations: TRUE
+---
+
+```{r setup, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.show = "asis",
+	message = FALSE,
+	warning = FALSE,
+	cache = FALSE,
+	results = "markup",
+	size = "small",
+	tidy = TRUE,
+	tidy.opts = list(width.cutoff = 60)
+)
+options(width=65)
+```
+
+# Preliminaries
+## Data Availability
+Pseudo-bulk of single-nuclear RNA-seq data is available [here]().
+
+The list of negative control genes is available [here](). These genes are not influenced by the biological effect
+of interest. The list of positive control genes is available [here](). These genes are known to be differentially
+expressed with respect to the biological effect of interest.
+
+The code used in this analysis has been deposited into Github, and can be available [here]().
+
+## Bioconductor packages
+The differential expression (DE) analysis was carried out with `r Biocpkg("edgeR")`. Remove Unwanted Variation (RUV) normalization is implemented in the `r Biocpkg("RUVSeq")` package. To normalize raw data before RUV and to visualize the Principal Component Analysis (PCA) of UQ + RUV normalization, we used the `r Biocpkg("EDASeq")` package. Some plots were visualized using the [*ggplot2*](https://cran.r-project.org/web/packages/ggplot2/index.html) package. The Upset plot was visualized using the [*UpSetR*](https://cran.r-project.org/web/packages/UpSetR/index.html) and the [*ComplexUpset*](https://cran.r-project.org/web/packages/ComplexUpset/index.html) packages.
+
+```{r preliminaries}
+library(SingleCellExperiment)
+library(scuttle)
+library(edgeR)
+library(RUVSeq)
+library(ggplot2)
+library(EDASeq)
+library(ggrepel)
+library(UpSetR)
+library(ComplexUpset)
+library(patchwork)
+```
+
+# Differential expression analysis
+For each neuronal cell-type with more than 500 cells, the differential gene expression analysis was carried out with a negative binomial generalized linear model (GLM) on pseudo-bulk samples.
+
+## Load pseudo-bulk
+```{r}
+# Load pseudo-bulk data
+pb <- readRDS("snrna_pb.rds")
+# For the differential expression analysis, we selected the neuronal labels
+pb <- pb[, pb$class == "Glutamatergic" | pb$class == "GABAergic"]
+
+# Create a list of pseudo-bulk for each cell-type
+pb_ct <- lapply(unique(pb$azimuth_labels), function(ct) pb[, pb$azimuth_labels == ct])
+```
+
+## UQ + RUV
+Then, we normalized the raw counts with the upper-quartile method, using the *betweenLaneNormalization* function of the EDASeq package with option *which="upper"*.
+To account for latent confounders, we computed a factor of unwanted variation on the normalized data, using the *RUVs* function of the RUVSeq package with k=2 and using as negative control genes a list of genes previously characterized as non-differential in sleep deprivation in a large [microarray meta-analysis](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3065-8). Specifically, 10% of negative control genes were randomly selected to be used for evaluation and  the remaining control genes were used to fit RUV normalization. 
+
+```{r}
+# UQ + RUV normalization
+# The 10% of meta-analysis negative control genes were randomly selected.
+neg_ctrl <- read.table("SD_Negative_Controls.txt")
+set.seed(23)
+random_ng <- sample(neg_ctrl$x, round(length(neg_ctrl$x) * 0.1))
+# The remaining control genes were used to fit RUV normalization.
+neg_ctrl <- neg_ctrl[!(neg_ctrl$x %in% random_ng), ]
+neg_ctrl <- intersect(rownames(pb), neg_ctrl)
+
+# UQ normalization 
+ct_counts <- lapply(pb_ct, function(x) as.matrix(counts(x)))
+uq <- lapply(ct_counts, function(u) betweenLaneNormalization(u, which="upper"))
+
+# RUV normalization
+ruv2_expr_data <- ruv2_w <- list()
+for (i in seq_along(unique(pb$azimuth_labels))) {
+  # A matrix specifying the replicates constructed
+  groups <- makeGroups(pb_ct[[i]]$condition)
+  
+  # The matrix of normalized counts was saved in a list object
+  ruv2_expr_data[[i]] <- RUVs(uq[[i]], 
+                              cIdx = neg_ctrl, scIdx = groups, k = 2)
+  # The factors of unwanted variation were saved in a list object
+  ruv2_w[[i]] <- ruv2_expr_data[[i]]$W
+}
+```
+
+## Differentially expressed genes identification
+We then used the Bioconductor edgeR package to perform differential expression after filtering the lowly expressed genes with the *filterByExpr* function (with default parameters). The factor of unwanted variation was added in the design matrix. The differential gene expression analysis was computed with the function glmLRT by specifying “SD-HC” (Sleep Deprived vs Home Cage Control) as contrast and offset term equal to zero, since normalization was already carried out by the RUV factor.
+
+```{r}
+res_uq_ruv2 <- df_uq_ruv2 <- list()
+for (i in seq_along(unique(pb$azimuth_labels))) {
+  y <- DGEList(counts(pb_ct[[i]]), samples = colData(pb_ct[[i]]))
+  
+  # The genes were filtered for each cell-type
+  keep <- filterByExpr(y, group = pb_ct[[i]]$condition)
+  y <- y[keep, ]
+  # Upper-quartile normalization
+  y <- calcNormFactors(y, method = "upperquartile")
+  
+  # Design Matrix
+  design <- model.matrix(~0 + y$samples$condition + ruv2_w[[i]], y$samples)
+  colnames(design) <- c("HC", "SD", "W_1", "W_2")
+  
+  y <- estimateDisp(y, design)
+  
+  fit <- glmFit(y, design)
+  
+  # Contrast creation (SD vs HC)
+  contrast <- makeContrasts(SD - HC, levels = design)
+  
+  res_uq_ruv2[[i]] <- glmLRT(fit, contrast = contrast)
+  
+  df_uq_ruv2[[i]] <- as.data.frame(res_uq_ruv2[[i]]$table)
+  df_uq_ruv2[[i]] <- df_uq_ruv2[[i]][order(df_uq_ruv2[[i]]$PValue), ]
+  
+  FDR <- as.data.frame(topTags(res_uq_ruv2[[i]], n = length(rownames(pb)))[, 5])
+  
+  df_uq_ruv2[[i]] <- cbind(df_uq_ruv2[[i]], FDR)
+  df_uq_ruv2[[i]] <- df_uq_ruv2[[i]][order(df_uq_ruv2[[i]]$FDR), ]
+}
+names(df_uq_ruv2) <- unique(pb$azimuth_labels)
+```
+
+### Results
+We used the Benjamini-Hochberg procedure to control for the false discovery rate (FDR), i.e., we considered as differentially expressed those genes that had an adjusted p-value less than 5%.
+
+```{r}
+# N. of nuclei
+n_nuclei <- matrix(pb$ncells, 11, 6, byrow = TRUE)
+n_nuclei <- rowSums(n_nuclei)
+
+# DEA results for differentially expressed genes were selected
+df_degs <- lapply(df_uq_ruv2, function(u) u[u$FDR < 0.05, ])
+
+# N. of DEGs
+n_degs <- lapply(df_degs, function(u) length(rownames(u)))
+
+# Load meta-analysis positive control genes
+posctrl <- read.table("Additional_File2_Positive_Controls.txt", header = TRUE)
+# N. of DE positive control genes
+n_de_posctrl <- lapply(df_degs, function(u) length(intersect(rownames(u), posctrl$Gene_ID)))
+```
+
+#### Scatter plot
+We visualized the scatter plot of the logarithm of the number of nuclei and the logarithm of the number of differential genes expressed.
+```{r}
+label_color <- c("Astro", "Car3", "Endo", "L2/3 IT CTX", "L4/5 IT CTX", "L5 IT CTX", "L5 PT CTX", "L5/6 NP CTX", "L6 CT CTX", "L6 IT CTX" , "L6b CTX", "Lamp5", "Micro-PVM", "Oligo", "Pvalb",    "SMC-Peri", "Sncg", "Sst", "Sst Chodl", "Vip", "VLMC")
+  
+subclass_color <- c("#957b46", "#5100FF", "#c95f3f", "#0BE652", "#00E5E5", "#50B2AD", "#0D5B78",   "#3E9E64",  "#2D8CB8" ,  "#A19922",   "#7044AA",   "#DA808C", "#94AF97", "#744700", "#D93137",   "#4c1130" ,  "#ffff00",   "#FF9900", "#B1B10C",   "#B864CC",   "#a9bd4f")
+
+names(subclass_color) <- label_color
+
+subclass_color <- data.frame(subclass_color)
+subclass_color$Label <- rownames(subclass_color)
+colnames(subclass_color) <- c("color", "Label")
+rm_labels <- subclass_color[rownames(subclass_color) %in% 
+                              intersect(rownames(subclass_color), levels(factor(pb$azimuth_labels))), ]
+
+neuronal_color <- rm_labels$color
+names(neuronal_color) <- rm_labels$Label
+
+tab <- as.data.frame(cbind(n_nuclei, as.matrix(n_degs)))
+colnames(tab) <- c("nuclei", "DEG")
+tab$Label <- levels(factor(pb$azimuth_labels))
+tab$DEG <- as.numeric(tab$DEG)
+tab$nuclei <- as.numeric(tab$nuclei)
+
+# Scatter plot of log(nuclei) vs log(DEGs)
+ggplot(tab, aes(x = log(nuclei), y = log(DEG))) +
+  geom_point(aes(color = Label), size = 3) +
+  scale_color_manual(values = neuronal_color) + theme_classic() +
+  theme(legend.position = "none", axis.text = element_text(size = 7), axis.title = element_text(size = 7)) +
+  stat_smooth(method = "lm", formula = y ~ poly(x, 2), se = FALSE, col = "grey") +
+  geom_label_repel(aes(label = Label), size = 2,
+                   box.padding   = 0.5,
+                   point.padding = 0,
+                   segment.color = "grey50",min.segment.length = unit(1.5, 'lines'), colour = neuronal_color)
+```
+
+#### PCA
+Then, we visualized the PCA for each cell-type.
+
+```{r}
+label <- levels(factor(pb$azimuth_labels))
+set_ct <- lapply(pb_ct, function(u) newSeqExpressionSet(as.matrix(round(counts(u))),
+                                                        phenoData = data.frame(colData(u), 
+                                                                               row.names = colnames(u))))
+set_ct <- lapply(set_ct, function(u) betweenLaneNormalization(u, which="upper"))
+
+set_ruv2 <- list()
+for (i in seq_along(unique(pb$azimuth_labels))) {
+  # A matrix specifying the replicates constructed
+  groups <- makeGroups(pb_ct[[i]]$condition)
+  
+  # k = 2
+  # The matrix of normalized counts was saved in a list object
+  set_ruv2[[i]] <- RUVs(set_ct[[i]], cIdx = neg_ctrl, scIdx = groups, k = 2)
+  
+}
+```
+
+```{r, fig.height=15, fig.width=10}
+par(mfrow = c(4, 3))
+for (i in seq_along(label)) {
+  plotPCA(set_ruv2[[i]], xlim = c(-1, 1), label = FALSE, pch = 20, theme_size = 7,
+          col = as.numeric(as.factor(set_ruv2[[i]]$condition)), cex = 2,
+          main = paste(label[i], sep = " "))
+}
+```
+
+#### Volcano plot
+We visualized the volcano plot and histogram for each cell-type.
+
+```{r, fig.width=10, fig.height=10}
+## Volcano plot of all cell-types 
+for (i in seq_along(df_uq_ruv2)) {
+  df_uq_ruv2[[i]]$Significance <- "No Significant"
+  df_uq_ruv2[[i]]$Significance[df_uq_ruv2[[i]]$FDR < 0.05] <- "Significant"
+  inter <- intersect(rownames(df_uq_ruv2[[i]][df_uq_ruv2[[i]]$FDR < 0.05, ]), posctrl$Gene_ID)
+  df_uq_ruv2[[i]]$Significance[rownames(df_uq_ruv2[[i]]) %in% inter] <- "SignificantPos"
+}
+
+p1 <- ggplot(data = df_uq_ruv2[[1]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[1]][(df_uq_ruv2[[1]]$Significance == "Significant"| 
+                                      df_uq_ruv2[[1]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[1]][df_uq_ruv2[[1]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L2/3 IT CTX") + annotate("text", x = -4, y = 2.5, label = n_degs[[1]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[1]], color = "red")
+
+p2 <- ggplot(data = df_uq_ruv2[[2]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[2]][(df_uq_ruv2[[2]]$Significance == "Significant"|
+                                      df_uq_ruv2[[2]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[2]][df_uq_ruv2[[2]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L4/5 IT CTX") + 
+  annotate("text", x = -4, y = 2.5, label = n_degs[[2]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[2]], color = "red")
+
+p3 <- ggplot(data = df_uq_ruv2[[3]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[3]][(df_uq_ruv2[[3]]$Significance == "Significant"|
+                                      df_uq_ruv2[[3]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[3]][df_uq_ruv2[[3]]$Significance == "SignificantPos", ], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L5 IT CTX" ) + annotate("text", x = -4, y = 2, label = n_degs[[3]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[3]], color = "red")
+
+p4 <- ggplot(data = df_uq_ruv2[[4]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[4]][(df_uq_ruv2[[4]]$Significance == "Significant"|
+                                      df_uq_ruv2[[4]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[4]][df_uq_ruv2[[4]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L5 PT CTX") + annotate("text", x = -4, y = 2, label = n_degs[[4]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[4]], color = "red")
+
+p5 <- ggplot(data = df_uq_ruv2[[5]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[5]][(df_uq_ruv2[[5]]$Significance == "Significant"|
+                                      df_uq_ruv2[[5]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[5]][df_uq_ruv2[[5]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L5/6 NP CTX") + annotate("text", x = -4, y = 1.5, label = n_degs[[5]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[5]], color = "red")
+
+p6 <- ggplot(data = df_uq_ruv2[[6]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[6]][(df_uq_ruv2[[6]]$Significance == "Significant"|
+                                      df_uq_ruv2[[6]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[6]][df_uq_ruv2[[6]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle( "L6 CT CTX") + annotate("text", x = -4, y = 2, label = n_degs[[6]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[6]], color = "red")
+
+p7 <- ggplot(data = df_uq_ruv2[[7]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[7]][(df_uq_ruv2[[7]]$Significance == "Significant"|
+                                      df_uq_ruv2[[7]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[7]][df_uq_ruv2[[7]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L6 IT CTX") + annotate("text", x = -4, y = 2, label = n_degs[[7]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[7]], color = "red")
+
+p8 <- ggplot(data = df_uq_ruv2[[8]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[8]][(df_uq_ruv2[[8]]$Significance == "Significant"|
+                                      df_uq_ruv2[[8]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[8]][df_uq_ruv2[[8]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("L6b CTX") + annotate("text", x = -4, y = 1.5, label = n_degs[[8]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[8]], color = "red")
+
+p9 <- ggplot(data = df_uq_ruv2[[9]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[9]][(df_uq_ruv2[[9]]$Significance == "Significant"|
+                                      df_uq_ruv2[[9]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[9]][df_uq_ruv2[[9]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("Pvalb") + annotate("text", x = -4, y = 1.5, label = n_degs[[9]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[9]], color = "red")
+
+p10 <- ggplot(data = df_uq_ruv2[[10]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[10]][(df_uq_ruv2[[10]]$Significance == "Significant"|
+                                       df_uq_ruv2[[10]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[10]][df_uq_ruv2[[10]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values = c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("Sst") + annotate("text", x = -4, y = 1.5, label = n_degs[[10]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[10]], color = "red")
+
+p11 <- ggplot(data = df_uq_ruv2[[11]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  geom_point(data= df_uq_ruv2[[11]][(df_uq_ruv2[[11]]$Significance == "Significant"|
+                                       df_uq_ruv2[[11]]$Significance == "No Significant") ,],size = 1) + 
+  geom_point(data= df_uq_ruv2[[11]][df_uq_ruv2[[11]]$Significance == "SignificantPos",], size = 1) + 
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none") +
+  scale_color_manual(values=c("Significant" = "black", "No Significant" = "grey", "SignificantPos" = "red")) +
+  ggtitle("Vip") + annotate("text", x = -4, y = 1.5, label = n_degs[[11]]) +
+  annotate("text", x = -4, y = 0.5, label = n_de_posctrl[[11]], color = "red")
+
+# Blank space
+p12 <- ggplot(data = df_uq_ruv2[[11]], aes(x = logFC, y = -log10(PValue), col = Significance)) +
+  xlim(-5, 5) + theme_classic(base_size = 7) + theme(legend.position = "none")
+
+(p1|p2|p3)/(p4|p5|p6)/(p7|p8|p9)/(p10|p11|plot_spacer())
+```
+
+#### Histogram of p-value distribution
+```{r, fig.width=10, fig.height=15}
+# Histogram of p-value distribution
+label <- unique(pb$azimuth_labels)
+
+par(mfrow = c(4, 3))
+for (i in seq_along(label)) {
+  hist(df_uq_ruv2[[i]]$PValue, xlab = "p-value", main = paste(label[i], sep = " "))
+}
+```
+
+# Upset plot
+For Glutamatergic and GABAergic neurons, we used the *upset* function of the UpSetR package to identify the list of unique differentially expression genes for each cell-type.
+
+```{r, fig.width=15, fig.height=10}
+df_degs <- lapply(df_uq_ruv2, function(u) rownames(u[u$FDR < 0.05, ]))
+
+# Since the p-value distribution wasn't good, the L6b CTX label was removed
+ll <- list("L2/3 IT CTX" = df_degs[[1]], "L4/5 IT CTX" = df_degs[[2]],
+           "L5 IT CTX" = df_degs[[3]], "L5 PT CTX" = df_degs[[4]],
+           "L6 CT CTX" = df_degs[[6]], "L6 IT CTX" = df_degs[[7]],
+           "L6b CTX" = df_degs[[8]],
+           "Pvalb" = df_degs[[9]], "Sst" = df_degs[[10]], "Vip" = df_degs[[11]])
+
+df.edgeRList <- fromList(ll)
+
+upset(df.edgeRList, colnames(df.edgeRList)[1:10],
+      sort_intersections_by = c("degree", "cardinality"),
+      sort_intersections = "ascending",
+      name = "", width_ratio = 0.1, keep_empty_groups = TRUE,
+      queries = list(
+        upset_query(set = "L2/3 IT CTX", fill = "#0BE652"),
+        upset_query(set = "L4/5 IT CTX", fill = "#00E5E5"),
+        upset_query(set = "L5 IT CTX", fill = "#50B2AD"),
+        upset_query(set = "L5 PT CTX", fill = "#0D5B78"),
+        upset_query(set = "L6 CT CTX", fill = "#2D8CB8"),
+        upset_query(set = "L6 IT CTX", fill = "#A19922"),
+        upset_query(set = "L6b CTX", fill = "#7044AA"),
+        upset_query(set = "Pvalb", fill = "#D93137"),
+        upset_query(set = "Sst", fill = "#FF9900"),
+        upset_query(set = "Vip", fill = "#B864CC")
+      ),
+      intersections = list(
+        # Unique DEGs were visualized for each cell-type
+        "L2/3 IT CTX", "L4/5 IT CTX", "L5 IT CTX", "L5 PT CTX",
+        "L6 CT CTX", "L6 IT CTX", "L6b CTX", "Pvalb", "Sst", "Vip"
+      ),
+      base_annotations = list(
+        "Intersection size" = (
+          intersection_size(
+            bar_number_threshold = 1, # show all numbers on top of bars
+            width = 0.4,  # reduce width of the bars
+            text = list(size = 2)
+          )
+          # add some space on the top of the bars
+          + scale_y_continuous(expand = expansion(mult = c(0, 0.05)))
+          + theme(
+            # hide grid lines
+            panel.grid.major = element_blank(),
+            panel.grid.minor = element_blank(),
+            # show axis lines
+            axis.line = element_line(colour = "black")
+          )
+        )
+      ),
+      stripes = upset_stripes(
+        geom = geom_segment(size = 3),
+        colors = c("grey95", "white")
+      ),
+      matrix = intersection_matrix(
+        geom = geom_point(
+          shape = "circle filled",
+          size = 2,
+          stroke = 0
+        )
+      ),
+      set_sizes = (
+        upset_set_size(geom = geom_bar(width = 0.5), filter_intersections = TRUE)
+        + theme(
+          axis.line.x = element_line(colour = "black"),
+          axis.ticks.x = element_line()
+        )
+      ),
+      themes = upset_default_themes(text = element_text(size = 7, color = "black"))) +
+  theme(plot.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_blank())
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```
