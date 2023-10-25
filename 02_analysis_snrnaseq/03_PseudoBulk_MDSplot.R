@@ -110,8 +110,6 @@ prep_sce <- prepSCE(pb_negctrl[, !(pb_negctrl$class == "Astro" |
 pb <-  aggregateData(prep_sce, assay = "logcounts", 
                      by = c("cluster_id", "sample_id"))
 
-neuronal_color <- subclass_color[c(2:9, 12, 14:15)]
-
 mds_negctrl <- pbMDS(pb) + scale_color_manual(values = subclass_color) +
   labs(col = "Cell-types", shape = "Condition") +
   theme(legend.spacing.y = unit(0, "cm"), axis.text = element_text(size = 7),
