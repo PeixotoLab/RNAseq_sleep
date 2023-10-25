@@ -119,7 +119,7 @@ seurat_obj <- CreateSeuratObject(counts = counts(sce_obj),
 # Cell-type annotation with Azimuth
 seurat_obj <- RunAzimuth(seurat_obj, reference = "reference/")
 
-# Dimensional riduction
+# Dimensional reduction
 seurat_obj <- RunTSNE(seurat_obj, reduction = "integrated_dr", 
                       dims = seq_len(20), seed.use = 1, do.fast = TRUE, 
                       verbose = FALSE, reduction.name = "TSNE")
@@ -139,7 +139,7 @@ ggsave(p, file = "snRNA_TSNEplot_Azimuth_NoLegend.pdf", width = 20, height = 20,
 
 p1 <- DimPlot(seurat_obj, reduction = "UMAP", group.by = "predicted.subclass_label")+
   NoLegend() + labs(x = "UMAP1", y="UMAP2") + ggtitle("") + 
-  scale_color_manual(values=subclass.color)
+  scale_color_manual(values = subclass_color)
 p1 <- LabelClusters(p1, id = "predicted.subclass_label",  fontface = "bold", color = "black", size=2)
 p1 <- p1 + theme(axis.text=element_text(size=7), axis.title=element_text(size=7))
 
