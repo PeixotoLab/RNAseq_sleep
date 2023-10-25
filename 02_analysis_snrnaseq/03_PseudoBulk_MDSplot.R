@@ -43,11 +43,11 @@ saveRDS(snrna_pb, file = "snrna_pb.rds")
 
 # MDS plot ####
 # Load Allen color palette
-load("/mnt/callisto/Zuin/AllenColorLabel.RData")
+load("AllenColorLabel.RData")
 
 # Load the code inside pbMDSfunction.R file if this error appears:
 # "Error in element_line(linewidth = 0.2, color = "lightgrey") :unused argument (linewidth = 0.2)"
-source("/mnt/callisto/Zuin/pbMDSfunction.R")
+source("pbMDSfunction.R")
 
 neuronal_color <- subclass_color[-c(1:3, 12:14, 16, 17, 19, 21)]
 
