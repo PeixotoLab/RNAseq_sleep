@@ -1,0 +1,463 @@
+---
+title: "A Global Transcriptional Atlas of the Effect of Sleep Loss in the Mouse Cortex"
+font_size: 12pt
+output: pdf_document
+toc: TRUE
+date: ""
+bibliography: biblio.bib
+link-ciations: TRUE
+---
+
+```{r setup, echo=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.show = "asis",
+	message = FALSE,
+	warning = FALSE,
+	cache = FALSE,
+	results = "markup",
+	size = "small",
+	tidy = TRUE,
+	tidy.opts = list(width.cutoff = 60)
+)
+# cache=TRUE,cache.lazy = FALSE
+options(width=65)
+library(BiocStyle)
+library(knitr)
+
+```
+
+# Differential Transcript Usage using Fishpond with RUVs
+
+## Description
+
+Include abstract here?
+
+This code was adapted from the tutorial here: <https://bioconductor.org/packages/release/bioc/vignettes/fishpond/inst/doc/swish.html#Quick_start>
+
+## Data Availability
+
+"Raw" sequencing data for this analysis is stored in GEO under accession number [GSE211088](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE211088). Additionally, the bulk files were previously published [@ingiosi2019] and can be accessed in GEO under accession number [GSE113754](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE113754).
+
+The code used in this analysis has been deposited into Github, and can be accessed via the following link: **link to github folder where this code is**
+
+Prior to this analysis, files were quantified using *Salmon* [@patro2017] and imported into *tximeta* [@love2020] to generate a *SummarizedExperiment* object.
+
+## Data Import
+
+Establish the working directory using the code below. The working directory can be thought of as the default location where files can be accessed from or saved to.
+
+```{r}
+setwd("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta")
+dir <- setwd("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta")
+```
+
+Import the colData, which contains the sample names and condition (the condition is necessary for Fishpond). In short, the colData is a file that contains descriptions of the samples, and is created during tximeta [@love2020]. You can see what the columns and first few rows of the file look like using the *head()* function:
+
+```{r}
+coldata <- read.table(file.path(dir, "coldata.txt"))
+head(coldata)
+```
+
+Add a path to locate the files:
+
+```{r}
+coldata$files <- file.path(dir, "data/Salmon_Quants", coldata$names, "quant.sf")
+```
+
+Before continuing with the analysis, make sure that all files in your colData exist in this location:
+
+```{r}
+all(file.exists(coldata$files))
+```
+
+Load *SummarizedExperiment* and *tximeta* packages:
+
+```{r}
+suppressPackageStartupMessages(library(SummarizedExperiment)) # Version 1.28.0
+suppressPackageStartupMessages(library(tximeta)) # Version 1.16.1
+```
+
+Load the quantification data with *tximeta*:
+
+```{r}
+se <- tximeta(coldata) 
+```
+
+Ensure assays are loaded by viewing *assayNames()*. Assays are experimental results, and are necessary for *fishpond*. Call *assay()* to retrieve experimental data.
+
+```{r}
+assayNames(se)
+```
+
+View rownames (transcript IDs) using the *head()* function:
+
+```{r}
+head(rownames(se))
+```
+
+# Differential Transcript Usage Analysis Starts Here
+
+'se' will be referred to as 'y' for the remainder of the analysis.
+
+```{r}
+y <- se
+```
+
+I will do a two group comparison between wild-type animals. Those that were left undisturbed in their home cage (HC) for 5 hours and those who were sleep sleep deprived (SD) via gentle handling for 5 hours.
+
+The following analysis will compare the second group to the first group listed in *levels*, in this case, SD compared to HC controls.
+
+```{r}
+y <- y[,y$condition %in% c("WTHC5", "WTSD5")]
+y$condition <- factor(y$condition, levels=c("WTHC5", "WTSD5"))
+```
+
+Load the *fishpond* package to proceed with differential transcript usage analysis:
+
+```{r}
+suppressPackageStartupMessages(library(fishpond)) # Version 2.4.1
+```
+
+Scale inferential replicates to the mean sequencing depth. It is important to note that only the inferential replicates are scaled during this process, not the counts, which will be relevant in later steps.
+
+```{r}
+y <- scaleInfReps(y)
+```
+
+Before filtering, we have 140,992 transcripts:
+
+```{r}
+dim(y)
+```
+
+Filter here, keeping a minimum count of 10 transcripts across a minimum of 3 replicates. In this step, we are removing most of the rows with zero to very low counts before proceeding with the analysis.
+
+```{r}
+y <- labelKeep(y, minCount = 10, minN = 3) 
+```
+
+After filtering, we have 54,030 transcripts:
+
+```{r}
+y <- y[mcols(y)$keep,]
+dim(y)
+```
+
+For DTU analysis, we apply a secondary filter. This is to ensure that we are only discovering transcripts that have reproducible changes in usage. Following this secondary filter, we are left with 50,227 transcripts, which can be verified with *dim()*.
+
+```{r}
+y <- y[rowData(y)$log10mean > 1]
+
+dim(y)
+```
+
+## Determining the Sources of Unwanted Variation with RUVs
+
+Assemble a matrix that contains the groups. If you have uneven groups, "fill" the extra spaces in the matrix with "-1" values.
+
+```{r}
+groups <- matrix(data = c(1:5, 6:10), nrow = 2, byrow = TRUE)
+```
+
+Check to make sure 'groups' appears as expected.
+
+```{r}
+groups
+```
+
+Assign the names of the variables to match the column names of your data. This is important for *RColorBrewer*, which is used to designate colors for figures later on in this analysis:
+
+```{r}
+x <- as.factor(rep(c("WTHC5", "WTSD5"), c(5,5)) )
+x
+```
+
+Shorten sample names for simplicity while making the matrix:
+
+```{r}
+names(x) <- c("HC5_1", "HC5_2", "HC5_3", "HC5_4", "HC5_5", "SD5_1", "SD5_2", 
+              "SD5_3", "SD5_4", "SD5_5")
+```
+
+See what type of data class 'x' is using the code below:
+
+```{r}
+data.class(x)
+```
+
+Turn 'x' into a matrix:
+
+```{r}
+as.matrix(x)
+```
+
+Load *RColorBrewer* here:
+
+```{r}
+suppressPackageStartupMessages(library(RColorBrewer)) # Version 1.1-3
+```
+
+This palette will be used for PCA and RLE plots. HC controls will be light grey and SD samples will be dark grey. To view other palette options, use *brewer.pal.info*:
+
+```{r}
+colors <- brewer.pal(9, "Greys")[c(6, 7)]
+colLib <- colors[x]
+HC_color  <- brewer.pal(9, "Greys")[6] 
+SD_color <- brewer.pal(9, "Greys")[7] 
+```
+
+Remove the version #s for each transcript. It is helpful to note that the version #s correspond to the release version, they are not different transcripts of the same gene:
+
+```{r}
+rownames(y) <- lapply(rownames(y),  sub, pattern = "\\.\\d+$", replacement = "")
+data.class(rownames(y))
+```
+
+Extract the counts from the *SummarizedExperiment* object for normalization. Note that we will estimate the factors of unwanted variation on the counts, and then we will apply that across the inferential replicates further downstream:
+
+```{r}
+counts <- as.matrix((assays(y)[["counts"]]))
+data.class(counts)
+```
+
+Upper Quartile (UQ) normalization is implemented here with the *EDASeq* package, and accounts for variation in sequencing depth:
+
+As the counts were not scaled (only the inferential replicates), we need to account for sequencing depth prior to proceeding with *RUVs* normalization, which allows us to obtain a the estimated factors of unwanted variation (*s\$W*):
+
+```{r}
+suppressPackageStartupMessages(library("EDASeq")) # Version 2.32.0
+uq <- betweenLaneNormalization(counts, which = "upper")
+dim(uq)
+```
+
+Shorten the sample names (*colnames*) for figures:
+
+```{r}
+colnames(uq)
+colnames(uq) <- c("HC5_1", "HC5_2", "HC5_3", "HC5_4", "HC5_5", "SD5_1", "SD5_2", 
+                  "SD5_3", "SD5_4", "SD5_5")
+```
+
+Here we plot two quality control plots (RLE and PCA) following UQ normalization. Note that triangles are sleep deprived animals and circles are home cage control animals that were collected at the same circadian time:
+
+```{r}
+plotRLE(uq, col= colLib, outline = FALSE, las = 3, ylim = c(-1, 1), 
+        ylab = "Relative Log Expression", cex.axis = 1.3, cex.lab = 1.3)
+plotPCA(uq, labels = FALSE, col = colLib, cex = 1.5, cex.axis = 1.3, cex.lab = 1.3, 
+        xlim = c(-0.75, 0.75), ylim = c(-0.75, 0.75), pch = rep(c(19,17), times = c(5,5)))
+```
+
+Load *RUVSeq* package:
+
+```{r}
+suppressPackageStartupMessages(library(RUVSeq)) # Version 1.32.0
+```
+
+*RUVseq*: Here we will estimate a matrix that contains estimated factors of unwanted factors after UQ normalization.
+
+*RUVs* uses technical replicates or negative controls samples. In this instance, as we do not have negative controls for transcripts, we will use the rownames of the matrix y after filtering (all expressed transcripts). For additional information regarding *RUVs*, see [@risso2014].
+
+We have set the numbers of factors of unwanted variation (*k*) = 4, which optimizes the positive control recovery (at the gene level) without removing signal. When one is beginning analysis, it is recommended to test a variety of *k*s, and compare the results to one another.
+
+```{r}
+s <- RUVs(x = uq, cIdx = rownames(y), scIdx = groups, k = 4)
+```
+
+Plot the RLE and PCA plots (quality control figures) again following *RUVs* normalization. After proper normalization, the largest source of variation in the dataset is the treatment as visualized on the PCA plot (separated along PC1).
+
+```{r}
+plotRLE(s$normalizedCounts, col= colLib, outline = FALSE, las = 3, 
+        ylim = c(-1, 1), ylab = "Relative Log Expression", cex.axis = 1.2, 
+        cex.lab = 1.2)
+plotPCA(s$normalizedCounts, labels = FALSE, col = colLib, cex = 1.3, 
+        cex.axis = 1.2, cex.lab = 1.2, xlim = c(-0.75, 0.75), ylim = c(-0.75, 0.75), 
+        pch = rep(c(19,17), times = c(5,5)))
+```
+
+Downstream we will use *s\$W* (from *RUVs*) as the estimation of batch factors.
+
+'infRepIdx' lists the inferential replicates (30):
+
+```{r}
+infRepIdx <- grep("infRep",assayNames(y),value=TRUE)
+```
+
+Save the number of inferential replicates as 'nreps':
+
+```{r}
+nreps <- length(infRepIdx)
+nreps
+```
+
+Account for continuous variables with *removeBatchEffect* from *limma*. Our samples do not fall into discrete clusters so we will use the following approach recommended by the *fishpond* developers.
+
+In short, this is done by directly scaling the estimated counts across inferential replicates.
+
+First inferential replicates are logged as *limma* requires log-expression values for a series of samples. This is done with the *assay* function from the *SummarizedExperiment* package.
+
+First, we load the *limma* package:
+
+```{r}
+suppressPackageStartupMessages(library(limma)) # Version 3.54.2
+```
+
+```{r}
+model_matrix <- model.matrix(~condition, colData(y))
+pc <- .1 # This is added to avoid negative InfReps
+for (k in seq_len(nreps)) {
+  logInfRep <- log(assay(y, infRepIdx[k]) + pc)
+  logInfRep <- limma::removeBatchEffect(
+    logInfRep,
+    covariates=s$W,
+    design=model_matrix)
+  assay(y, infRepIdx[k]) <- exp(logInfRep)
+}
+```
+
+## Run Swish and Plot Additional Figures
+
+Unique to differential transcript usage analysis, *isoformProportions* takes the scaled and filtered counts and returns the proportions relative to that gene. Note that any transcripts from single transcript (isoform) genes are removed during this step.
+
+```{r}
+iso <- isoformProportions(y)
+```
+
+The Swish method is described in [@zhu2019]. Note that the *set.seed* function allows for the reproducibility of exact results in the future.
+
+```{r}
+set.seed(1)
+y <- swish(iso, x="condition")
+```
+
+View a table of significantly differently used transcripts. These transcripts have a qvalue \< 0.05:
+
+```{r}
+table(mcols(y)$qvalue < .05)
+```
+
+You can also view a table that shows which transcripts have an increase in proportion (1) in response to sleep deprivation and which have a decrease in proportion (-1):
+
+```{r}
+with(mcols(y),
+     table(sig=qvalue < .05, sign.lfc=sign(log2FC))
+)
+```
+
+Here, we will export a text file (containing the median of each transcript across inferential replicates) for additional plotting. First, select all features, use abind to combine multi-dimensional arrays, and then take the median:
+
+```{r}
+infReps <- assays(y)[ grep("infRep", assayNames(y)) ]
+infArray <- abind::abind( as.list(infReps), along=3 )
+dim(infArray)
+
+infMed <- apply(infArray, 1:2, median)
+data.class(infMed)
+
+write.table(infMed, file = "DTU_InfMed.txt", sep = "\t")
+```
+
+Plot a histogram to show the distribution of pvalues:
+
+```{r}
+hist(mcols(y)$pvalue, col="grey", ylim= c(0,10000), main = "", xlab = "Pvalue",
+     cex.axis = 0.9)
+```
+
+Add symbols (Gene IDs) to the *SummarizedExperiment* object. We will label genes on the MA plot in later steps. First load the *org.Mm.eg.db* package:
+
+```{r}
+suppressPackageStartupMessages(library(org.Mm.eg.db)) #Version 3.16.0
+y <- addIds(y, "SYMBOL", gene=TRUE)
+rowData(y)
+```
+
+Turn 'y' into a dataframe here, and save as a different variable. We do this to intersect with other lists when making plots, such as genes to highlight on the MA plot downstream. Check the dimensions with *dim()* to ensure that it has not changed:
+
+```{r}
+y_rowData <- as.data.frame(rowData(y))
+dim(y_rowData)
+```
+
+Here we graph an MA plot to visualize the differential usage of transcripts affected by sleep deprivation. An MA plot shows log2FC vs the log10mean. Transcripts above M=0 increase in proportion in response to the treatment, while transcripts below decrease in proportion in response to treatment.
+
+The transcripts that are farthest away from the y intercept (have the largest log10mean values) are the ones most affected by the treatment.
+
+Set colors for the MA plot here: Transcripts that do not have a significant change in usage are light grey. Transcripts that are significantly affected (qvalue \< 0.05) by SD are dark grey.
+
+```{r}
+Significant_Color <- brewer.pal(9, "Greys")[8]
+```
+
+We will highlight the changes in proportion of *Bdnf* and *Homer1.*
+
+```{r}
+suppressPackageStartupMessages(library(colorspace)) #Version 2.1-0
+
+Homer1_202_Color <- darken(brewer.pal(12, "Set3")[4], 0.1)
+Homer1_203_Color <- darken(brewer.pal(12, "Set3")[3], 0.1)
+Homer1_204_Color <- darken(brewer.pal(12, "Set3")[1], 0.1)
+
+Bdnf_201_Color <- darken(brewer.pal(12, "Set3")[5], 0.1)
+Bdnf_205_Color <- darken(brewer.pal(12, "Set3")[6], 0.1)
+
+Homer1_Colors <- c(Homer1_204_Color, Homer1_203_Color, Homer1_202_Color)
+Bdnf_Colors <- c(Bdnf_201_Color, Bdnf_205_Color)
+```
+
+Load the *dplyr* package and use *filter* to keep only the significant transcripts of *Bdnf* and *Homer1*:
+
+```{r}
+suppressPackageStartupMessages(library(dplyr)) #Version 1.1.1
+```
+
+```{r}
+Homer1_DTU <- dplyr::filter(y_rowData, SYMBOL == "Homer1" & qvalue < 0.05)
+Bdnf_DTU <- dplyr::filter(y_rowData, SYMBOL == "Bdnf" & qvalue < 0.05)
+```
+
+Use *plotMASwish* to generate the mean difference plot. Include labels and points for *Bdnf* and *Homer1* using the code below:
+
+```{r}
+plotMASwish(y, alpha=.05, xlim=c(.5,5.5), sigcolor = Significant_Color, 
+            cex.axis = 1.3, cex.lab = 1.3, ylab = "log2FC (Proportion)")
+
+with(
+  subset(mcols(y), SYMBOL == "Homer1" & qvalue < .05),
+  text(log10mean, log2FC, SYMBOL,
+       col= Homer1_Colors, pos=c(4,1,4), cex=1, font=2) #second was 2 before 1
+)
+
+with(
+  subset(mcols(y), SYMBOL == "Bdnf" & qvalue < .05),
+  text(log10mean, log2FC, SYMBOL,
+       col= Bdnf_Colors, pos=c(3,3), cex=1, font=2)
+)
+
+points(Homer1_DTU$log10mean, Homer1_DTU$log2FC, pch= 20, col = Homer1_Colors, cex = .2, lwd = 2)
+points(Homer1_DTU$log10mean, Homer1_DTU$log2FC, pch= 0, col = Homer1_Colors, cex = 1.5, lwd = 1.7)
+
+points(Bdnf_DTU$log10mean, Bdnf_DTU$log2FC, pch= 20, col = Bdnf_Colors, cex = .2, lwd = 2)
+points(Bdnf_DTU$log10mean, Bdnf_DTU$log2FC, pch= 0, col = Bdnf_Colors, cex = 1.5, lwd = 1.7)
+
+```
+
+Write text file using the code below. Select columns to include in the text file. These lists will then be annotated in Perl with the gene name and description.
+
+```{r}
+cols <- c("log10mean","log2FC","pvalue","qvalue")
+y_filter <- mcols(y)
+y_filter <- as.data.frame(y_filter)[,cols]
+y_filter <- dplyr::filter(y_filter, qvalue < .05)
+dim(y_filter)
+write.table(y_filter, file = "DTU_Significant_k=4.txt")
+```
+
+## Session Info
+
+```{r}
+sessionInfo()
+```
+
+## References
