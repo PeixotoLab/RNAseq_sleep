@@ -18,8 +18,8 @@
 ### The size of the bubbles will be determined by the # of unique genes within the term
 # or cluster
 
-### The color for now will be one shade of red for upregulated and one shade of 
-# blue for downregulated
+### The color will be a gradient and is based upon the p-values: shades of 
+# red for upregulated and blue for downregulated.
 
 ##### Load packages and set the working directory ####
 
