@@ -137,7 +137,7 @@ p <- DimPlot(seurat_obj, reduction = "TSNE", group.by = "predicted.subclass_labe
 p <- LabelClusters(p, id = "predicted.subclass_label",  fontface = "bold", color = "black", size = 5)
 ggsave(p, file = "snRNA_TSNEplot_Azimuth_NoLegend.pdf", width = 20, height = 20, units = "cm")
 
-p1 <- DimPlot(seurat.obj, reduction = "UMAP", group.by = "predicted.subclass_label")+
+p1 <- DimPlot(seurat_obj, reduction = "UMAP", group.by = "predicted.subclass_label")+
   NoLegend() + labs(x = "UMAP1", y="UMAP2") + ggtitle("") + 
   scale_color_manual(values=subclass.color)
 p1 <- LabelClusters(p1, id = "predicted.subclass_label",  fontface = "bold", color = "black", size=2)
