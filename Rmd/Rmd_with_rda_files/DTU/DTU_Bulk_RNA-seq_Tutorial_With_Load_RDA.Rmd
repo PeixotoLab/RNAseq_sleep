@@ -46,13 +46,6 @@ Prior to this analysis, files were quantified using *Salmon* [@patro2017] and im
 
 ## Data Import
 
-Establish the working directory using the code below. The working directory can be thought of as the default location where files can be accessed from or saved to.
-
-```{r}
-setwd("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta")
-dir <- setwd("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta")
-```
-
 Import the colData, which contains the sample names and condition (the condition is necessary for Fishpond). In short, the colData is a file that contains descriptions of the samples, and is created during tximeta [@love2020]. You can see what the columns and first few rows of the file look like using the *head()* function:
 
 ```{r}
