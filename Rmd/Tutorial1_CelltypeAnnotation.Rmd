@@ -1,0 +1,419 @@
+---
+title: "A Global Transcriptional Atlas of the Effect of Sleep Loss in the Mouse Cortex"
+font_size: 12pt
+output: pdf_document
+toc: TRUE
+date: ""
+#bibliography: biblio.bib
+link-ciations: TRUE
+---
+
+```{r setup, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.show = "asis",
+	message = FALSE,
+	warning = FALSE,
+	cache = FALSE,
+	results = "markup",
+	size = "small",
+	tidy = TRUE,
+	tidy.opts = list(width.cutoff = 60)
+)
+options(width=65)
+```
+
+# Preliminaries
+## Data Availability
+Single-nuclear RNA-seq data are available [here]().
+The code used in this analysis has been deposited into Github, and can be available [here]().
+
+## Bioconductor packages
+To identify mitochondrial genes, we retrieve the chromosome location of each ensembl gene with the `r Biocpkg("EnsDb.Mmusculus.v79")`.  package. We used the Bioconductor `r Biocpkg("scuttle")`package to detect low quality and damaged droplets. The potential doublets removal was implemented in `r Biocpkg("scuttle")` package. For cell-type assignment reference dataset was made available at [*AllenInstituteBrainData*](https://github.com/drighelli/AllenInstituteBrainData). Cell annotation was computed using two methods: [*Azimuth*](https://github.com/satijalab/azimuth) and `r Biocpkg("SingleR")`. We used the `r Biocpkg("scuttle")` package to create pseudo-bulk. The visualization of the MDS plot was implemented in `r Biocpkg("muscat")` package.
+
+```{r}
+library(SingleCellExperiment)
+library(EnsDb.Mmusculus.v79) 
+library(scuttle) 
+library(scran)
+library(scDblFinder) 
+library(Seurat)
+library(Azimuth) 
+library(SeuratData)
+library(ggplot2)
+library(biomaRt)
+library(muscat)
+library(edgeR)
+library(AllenInstituteBrainData)
+library(dplyr)
+```
+
+# Data pre-processing
+## Data setting
+Load single-nuclear RNA-seq dataset. 
+```{r}
+snrna_data <- readRDS("sce_mouse_sleep_snrnaseq_complete.rds")
+snrna_data
+```
+
+We added the UMI counts of spliced mRNA and introns sharing the same Ensembl ID. To identify mitochondrial genes, we retrieve the chromosome location of each ensembl gene with the EnsDb.Mmusculus.v79 package. We split the data into six SingleCellExperiment objects, one for each mouse.
+
+```{r}
+# Exons
+exons <- snrna_data[-which(grepl("-I", rownames(snrna_data))), ]
+rownames(exons) <- substring(rownames(exons), 1, 18)
+
+introns <- snrna_data[which(grepl("-I", rownames(snrna_data))), ]
+rownames(introns) <- substring(rownames(introns), 1, 18)
+
+# We identified introns and exons with the same Ensembl ID
+same_ensembl <- intersect(rownames(exons), rownames(introns))
+exons <- exons[same_ensembl, ]
+exons <- exons[order(rownames(exons)), ]
+introns <- introns[same_ensembl, ]
+introns <- introns[order(rownames(introns)), ]
+
+rownames(snrna_data) <- substring(rownames(snrna_data), 1, 18)
+# Remove the introns and exons with the same Ensembl ID
+# from the single-nuclear data.
+snrna_data <- snrna_data[! rownames(snrna_data) %in% same_ensembl, ]
+
+# A new SingleCellExperiment object was created, where the sum of the UMI counts
+# of spliced mRNA and introns sharing the same Ensembl ID was added.
+sce <- SingleCellExperiment(assays = list(
+  counts = rbind(counts(snrna_data), counts(exons) + counts(introns))
+))
+
+colData(sce) <- colData(snrna_data)
+sce$sample_id[sce$sample_id == "8E"] <- "6E"
+
+# We created the sleep condition variable
+sce$condition <- sce$sample_id
+sce$condition[grep("C", sce$condition)] <- "HC" # Home Cage (HC)
+sce$condition[grep("E", sce$condition)] <- "SD" # Sleep Deprivated (SD)
+
+sce$sample_id <- paste(substr(sce$sample_id, 1, 1), sce$condition, sep = "")
+```
+
+```{r}
+# To identify mitochondrial genes, we retrieved the chromosome location of
+# each Ensembl Gene ID.
+ensids <- rownames(sce)
+map <- mapIds(EnsDb.Mmusculus.v79, keys = ensids,
+              column = "SEQNAME", keytype = "GENEID")
+
+stopifnot(length(map) == nrow(sce))
+rowData(sce)$CHR <- map
+
+# We split the data into six SingleCellExperiment objects,
+# one for each mouse.
+scelist <- list(sce[, sce$sample_id == "1HC"], sce[, sce$sample_id == "2SD"],
+                sce[, sce$sample_id == "3HC"], sce[, sce$sample_id == "4SD"],
+                sce[, sce$sample_id == "5HC"], sce[, sce$sample_id == "6SD"])
+```
+
+## Quality controls
+For each sample, we used the Bioconductor scuttle package to detect low quality and damaged droplets. Particularly, we computed per-cell quality-control metrics with the *perCellQCMetrics* function; these metrics include the sum of UMI counts, the number of detected genes, and the percentage of mitochondrial counts. 
+
+```{r}
+scelist_filt <- list()
+for (i in seq_along(scelist)) {
+  stats <- perCellQCMetrics(scelist[[i]], 
+                            subsets = list(Mito = which(rowData(scelist[[i]])$CHR == "MT")))
+  high_mito <- isOutlier(stats$subsets_Mito_percent, type = "higher")
+
+  colData(scelist[[i]]) <- cbind(colData(scelist[[i]]), stats)
+  scelist[[i]]$high_mito <- high_mito
+
+  qc_lib <- isOutlier(scelist[[i]]$sum, log = TRUE, type = "lower")
+  qc_nexprs <- isOutlier(scelist[[i]]$detected, log = TRUE, type = "lower")
+  discard <- qc_lib | qc_nexprs | scelist[[i]]$high_mito
+
+  scelist_filt[[i]] <- scelist[[i]][, !discard]
+}
+
+# Log-normalized counts
+scelist_filt <- lapply(scelist_filt, function(x) logNormCounts(x))
+```
+
+## Doublets removal
+Lastly, for each sample, we removed potential doublets with the scDblFinder (v1.12.0) package, using the *computeDoubletDensity* function to calculate the scores and the *doubletThresholding* function to set the doublet scores threshold with the *griffiths* method.
+
+```{r}
+# HVGs were calculated for each sample
+topgs <- lapply(scelist_filt, function(x) getTopHVGs(x, prop = 0.1))
+
+for (i in seq_along(scelist_filt)) {
+  set.seed(422)
+  # Function to calculate the scores
+  scores <- computeDoubletDensity(scelist_filt[[i]], subset.row = topgs[[i]])
+  # Function to set the doublet scores threshold
+  dbl_calls <- doubletThresholding(data.frame(score = scores), method = "griffiths", returnType = "call")
+
+  colData(scelist_filt[[i]]) <- cbind.DataFrame(colData(scelist_filt[[i]]), dbl_calls, scores)
+}
+
+scelist_sgl <- lapply(scelist_filt, function(u) u[, !u$dbl_calls == "doublet"])
+names(scelist_sgl) <- levels(factor(sce$sample_id))
+
+scelist_sgl
+```
+
+# Cell-type annotation
+## Reference dataset
+To identify cell types, we used the [Allen Whole Cortex & Hippocampus - 10x genomics (v2021)](https://www.sciencedirect.com/science/article/pii/S0092867421005018) as reference dataset . This dataset was imported by the *AllenInstituteBrainData* function of the AllenInstituteBrainData. We then selected the “Non-Neuronal”, “Glutamatergic” and “GABAergic” clusters coming from the Visual Cortex (VIS, VISl, VISm, VISp) to annotate our dataset. For computational issues, we selected a random subset of 100,000 cortical cells.
+Cell annotation was computed with an automatic and reference-based method: Azimuth.
+
+```{r}
+# Load reference dataset 
+reference <- AllenInstituteBrainData("Allen_Mouse_2021")
+rownames(reference) <- rowData(reference)$X
+reference
+
+# Select clusters from the Visual Cortex
+reference <- reference[, c(reference$region_label == "VIS" |
+                             reference$region_label == "VISl" |
+                             reference$region_label == "VISm" |
+                             reference$region_label == "VISp")]
+# Select cortex labels
+reference <- reference[, !is.na(reference$subclass_label) & reference$subclass_label != ""]
+reference <- reference[, -which(grepl("ENT", reference$subclass_label))]
+reference <- reference[, -which(grepl("PPP", reference$subclass_label))]
+reference <- reference[, -which(grepl("CR", reference$subclass_label))]
+reference <- reference[, -which(grepl("Meis", reference$subclass_label))]
+reference <- reference[, -which(grepl("SUB", reference$subclass_label))]
+
+# For computational issues, we decided to select 100,000 cortical random cells.
+# First, all cell was selected from the cell types with less than 100 cells.
+no_random <- reference[, c(reference$subclass_label == "SMC-Peri" | 
+                             reference$subclass_label == "VLMC")]
+
+# The resting cell types were selected.
+reference <- reference[, !c(reference$subclass_label == "SMC-Peri" | 
+                              reference$subclass_label == "VLMC")]
+
+df <- data.frame(colData(reference))
+# First, we randomly selected 100 cells for each cell type.
+set.seed(23)
+random <- df %>% group_by(subclass_label) %>% slice_sample(n = 100)
+random100 <- reference[, colnames(reference) %in% random$sample_name]
+
+reference <- reference[, !(colnames(reference) %in% random$sample_name)]
+
+# Then, we randomly selected 98046 of the resting cells
+set.seed(23)
+reference <- reference[, sample(colnames(reference), 98046)]
+
+reference <- cbind(reference, random100, no_random)
+reference
+```
+
+## Cell-type annotation with Azimuth 
+For the Azimuth method, the reference data was converted into a Seurat object and into a Azimuth compatible object, using the *AzimuthReference* function of the Azimuth package. Then query samples were merged and were converted into a Seurat object. 
+
+```{r, eval=FALSE}
+# First, the reference dataset was converted into Seurat object
+counts <- as.matrix(counts(reference))
+coldata <- colData(reference)
+reference_so <- CreateSeuratObject(counts = counts,
+                                   meta.data = data.frame(coldata))
+
+# And we created a compatible object for Azimuth cell annotation
+reference_so <- SCTransform(reference_so, assay = "RNA", new.assay.name = "SCT",
+                            variable.features.n = 2000, verbose = TRUE,
+                            conserve.memory = TRUE)
+reference_so <- RunPCA(reference_so, assay = "SCT", npcs = 50, verbose = FALSE,
+                       reduction.name = "PCA", return.model = TRUE)
+reference_so <- RunUMAP(reference_so, assay = "SCT", reduction = "PCA",
+                        dims = seq_len(50), seed.use = 1, verbose = FALSE,
+                        reduction.name = "umap", return.model = TRUE)
+
+reference_so$subclass_label <- as.factor(reference_so$subclass_label)
+Idents(object = reference_so) <- "subclass_label"
+
+# Azimuth-compatible object
+reference_azimuth <- AzimuthReference(reference_so, refUMAP = "umap",
+                                      refDR = "PCA", refAssay = "SCT",
+                                      dims = 1:50, metadata = c("subclass_label"),
+                                      verbose = TRUE)
+
+# save reference in a folder called "reference"
+ref_dir <- "reference/"
+SaveAnnoyIndex(object = reference_azimuth[["refdr.annoy.neighbors"]], 
+               file = file.path(ref_dir, "idx.annoy"))
+saveRDS(object = reference_azimuth, file = file.path(ref_dir, "ref.Rds"))
+```
+
+The query dataset was converted into a Seurat object.
+```{r}
+# The six SingleCellExperiment were combined and converted into a Seurat object.
+counts <- cbind(counts(scelist_sgl[[1]]), counts(scelist_sgl[[2]]),
+                counts(scelist_sgl[[3]]), counts(scelist_sgl[[4]]), 
+                counts(scelist_sgl[[5]]), counts(scelist_sgl[[6]]))
+
+sample_id <- c(scelist_sgl[[1]]$sample_id, scelist_sgl[[2]]$sample_id, 
+               scelist_sgl[[3]]$sample_id, scelist_sgl[[4]]$sample_id, 
+               scelist_sgl[[5]]$sample_id, scelist_sgl[[6]]$sample_id)
+
+condition <- c(scelist_sgl[[1]]$condition, scelist_sgl[[2]]$condition, 
+               scelist_sgl[[3]]$condition, scelist_sgl[[4]]$condition, 
+               scelist_sgl[[5]]$condition, scelist_sgl[[6]]$condition)
+
+sce_obj <-  SingleCellExperiment(assays = list(counts = counts))
+sce_obj$sample_id <- sample_id
+sce_obj$condition <- condition
+colnames(sce_obj) <- paste(colnames(sce_obj), sce_obj$sample_id, sep = "_")
+
+# SCE object was converted into a Seurat object
+seurat_obj <- CreateSeuratObject(counts = counts(sce_obj), 
+                                 meta.data = data.frame(colData(sce_obj)))
+```
+
+Cell annotation was computed using the *RunAzimuth* function of the Azimuth package. The t-SNE and the UMAP embeddings were computed using the *RunTSNE* and *RunUMAP* functions of the Seurat package with seed.use = 1.
+
+```{r, eval=FALSE}
+# Cell-type annotation with Azimuth
+seurat_obj <- RunAzimuth(seurat_obj, reference = "reference/")
+
+# Dimensional reduction
+seurat_obj <- RunTSNE(seurat_obj, reduction = "integrated_dr", 
+                      dims = seq_len(20), seed.use = 1, do.fast = TRUE, 
+                      verbose = FALSE, reduction.name = "TSNE")
+
+seurat_obj <- RunUMAP(seurat_obj, reduction = "integrated_dr", 
+                      dims = seq_len(20), seed.use = 1, verbose = FALSE,
+                      reduction.name = "UMAP")
+```
+
+```{r, echo=FALSE}
+seurat_obj <- readRDS("snrna_seurat_annot.rds")
+```
+
+## Dimensional reduction visualization 
+To visualize the assigned labels in two dimensions, the UMAP embeddings were computed using the *DimPlot* function of the Seurat package, with option *reduction = “integrated_dr”*, where *“integrated_dr”* is the supervised principal component analysis obtained by the Azimuth method.
+
+```{r}
+# Palette color creation 
+label_color <- c("Astro", "Car3", "Endo", "L2/3 IT CTX", "L4/5 IT CTX", "L5 IT CTX", "L5 PT CTX", "L5/6 NP CTX", "L6 CT CTX", "L6 IT CTX" , "L6b CTX", "Lamp5", "Micro-PVM", "Oligo", "Pvalb",    "SMC-Peri", "Sncg", "Sst", "Sst Chodl", "Vip", "VLMC")
+  
+subclass_color <- c("#957b46", "#5100FF", "#c95f3f", "#0BE652", "#00E5E5", "#50B2AD", "#0D5B78",   "#3E9E64",  "#2D8CB8" ,  "#A19922",   "#7044AA",   "#DA808C", "#94AF97", "#744700", "#D93137",   "#4c1130" ,  "#ffff00",   "#FF9900", "#B1B10C",   "#B864CC",   "#a9bd4f")
+
+names(subclass_color) <- label_color
+
+umap_plot <- DimPlot(seurat_obj, reduction = "UMAP", group.by = "predicted.subclass_label")+
+  NoLegend() + labs(x = "UMAP1", y="UMAP2") + ggtitle("") + 
+  scale_color_manual(values = subclass_color)
+umap_plot <- LabelClusters(umap_plot, id = "predicted.subclass_label",  fontface = "bold", color = "black", size=2)
+umap_plot <- umap_plot + theme(axis.text=element_text(size=7), axis.title=element_text(size=7))
+umap_plot
+```
+
+# Multidimensional Scaling (MDS)
+For the next analysis, cell-types with more than 500 cells were selected.
+```{r}
+# Add the Azimuth labels into the SingleCellExperiment object
+sce_obj$azimuth_labels <- seurat_obj$predicted.subclass_label
+
+# Cell-types with less than 500 cells were removed
+sce_obj <- sce_obj[, !c(sce_obj$azimuth_labels == "Car3" |
+                          sce_obj$azimuth_labels == "Endo" |
+                          sce_obj$azimuth_labels == "Lamp5" |
+                          sce_obj$azimuth_labels == "Sncg" |
+                          sce_obj$azimuth_labels == "Sst Chodl" |
+                          sce_obj$azimuth_labels == "VLMC")]
+```
+
+We created the pseudo-bulk samples with the function *aggregateAcrossCells* of the scuttle package. In other words, we computed sum counts values for each feature for each cell-type and mouse.
+
+```{r}
+# Pseudo-bulk creation
+snrna_pb <- aggregateAcrossCells(sce_obj, use.assay.type = "counts", 
+                                 id = DataFrame(label = sce_obj$azimuth_labels, 
+                                                sample = sce_obj$sample_id))
+colnames(snrna_pb) <- paste(snrna_pb$azimuth_labels, snrna_pb$sample_id, sep = "_")
+snrna_pb <- logNormCounts(snrna_pb)
+
+# Cell-type class variable was created
+snrna_pb$class <- snrna_pb$azimuth_labels
+snrna_pb$class[which(grepl("CTX", snrna_pb$class))] <- "Glutamatergic"
+
+snrna_pb$class[which(grepl("-", snrna_pb$class))] <- "Other"
+
+snrna_pb$class[!(snrna_pb$class == "Astro" | snrna_pb$class == "Oligo" | snrna_pb$class == "Glutamatergic" |
+             snrna_pb$class == "Other")] <- "GABAergic"
+```
+
+Finally, a pseudo-bulk level Multidimensional Scaling (MDS) plot was created with the *pbMDS* function of muscat package. Each point represents one subpopulation-sample instance; points are colored by subpopulation and shaped by treatment.
+
+```{r}
+source("pbMDSfunction.R")
+
+neuronal_color <- subclass_color[-c(1:3, 12:14, 16, 17, 19, 21)]
+
+# MDS plot according to the Glutamatergic labels
+prep_sce <- prepSCE(snrna_pb[, snrna_pb$class == "Glutamatergic"],
+                    kid = "azimuth_labels",
+                    gid = "condition",  
+                    sid = "sample_id",
+                    drop = TRUE)
+pb <-  aggregateData(prep_sce, assay = "logcounts",
+                     by = c("cluster_id", "sample_id"))
+
+pbMDS(pb) + scale_color_manual(values = neuronal_color) +
+  labs(col = "Cell-types", shape = "Condition") +
+  theme(axis.text = element_text(size = 7), axis.title = element_text(size = 7))
+
+# MDS plot according to the GABA-ergic labels
+prep_sce <- prepSCE(snrna_pb[, snrna_pb$class == "GABAergic"],
+                    kid = "azimuth_labels", gid = "condition",
+                    sid = "sample_id", drop = TRUE)
+pb <-  aggregateData(prep_sce, assay = "logcounts",
+                     by = c("cluster_id", "sample_id"))
+
+pbMDS(pb) + scale_color_manual(values = neuronal_color) +
+  labs(col = "Cell-types", shape = "Condition") +
+  theme(axis.text = element_text(size = 7), axis.title = element_text(size = 7))
+
+# MDS plot according to the Non-Neuronal labels
+prep_sce <- prepSCE(snrna_pb[, (snrna_pb$class == "Astro" |
+                                  snrna_pb$class == "Oligo" |
+                                  snrna_pb$class == "Other")],
+                    kid = "azimuth_labels", gid = "condition",
+                    sid = "sample_id", drop = TRUE)
+pb <-  aggregateData(prep_sce, assay = "logcounts", 
+                     by = c("cluster_id", "sample_id"))
+
+other_color <- subclass_color[c(1, 13:14, 16)]
+
+pbMDS(pb) + scale_color_manual(values = other_color) +
+  labs(col = "Cell-types", shape = "Condition") +
+  theme(legend.spacing.y = unit(0, "cm"), axis.text = element_text(size = 7),
+        axis.title = element_text(size = 7), legend.title = element_text(size = 7),
+        legend.text = element_text(size = 7), legend.key.size = unit(0.4, "cm"))
+
+# MDS plot according to the neuronal labels on negative control genes
+# Load negative control genes
+negctrl <- read.table("SD_Negative_Controls.txt")
+# Negative control gene was selected inside the pseudo-bulk object
+pb_negctrl <- snrna_pb[rownames(snrna_pb) %in% negctrl$x, ]
+
+prep_sce <- prepSCE(pb_negctrl[, !(pb_negctrl$class == "Astro" |
+                                     pb_negctrl$class == "Oligo" |
+                                     pb_negctrl$class == "Other")],
+                    kid = "azimuth_labels", gid = "condition",
+                    sid = "sample", drop = TRUE)
+pb <-  aggregateData(prep_sce, assay = "logcounts", 
+                     by = c("cluster_id", "sample_id"))
+
+pbMDS(pb) + scale_color_manual(values = neuronal_color) +
+  labs(col = "Cell-types", shape = "Condition") +
+  theme(legend.spacing.y = unit(0, "cm"), axis.text = element_text(size = 7),
+        axis.title = element_text(size = 7), legend.title = element_text(size = 7),
+        legend.text = element_text(size = 7), legend.key.size = unit(0.4, "cm"))
+```
+
+## Session Info
+```{r}
+sessionInfo()
+```
