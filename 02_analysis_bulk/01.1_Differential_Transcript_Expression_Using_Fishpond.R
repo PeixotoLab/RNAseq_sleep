@@ -354,7 +354,7 @@ Highlight_Color <- "dodgerblue" # Genes from "Highlight Genes" that are signific
 # Read the list of genes
 # If they have a transcript with a significant change in expression, it will 
 # be highlighted
-Highlight_Genes <- readxl::read_excel("050123_Highlight_Genes_Subset.xlsx", 
+Highlight_Genes <- readxl::read_excel("Peixoto_Figure_2_Supplementary_Table_2.xlsx", sheet = 2,
                                       col_names = FALSE)
 # # A tibble: 11 × 1
 # ...1    
