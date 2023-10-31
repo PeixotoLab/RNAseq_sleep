@@ -191,7 +191,7 @@ data.class(counts)
 # For gene level analysis, we can use a set of positive controls from 
 # (Gerstner et al. 2016) to assess the performance of our pipeline downstream. 
 # Load the positive controls here:
-Gene_Positive_Controls <- read.table("Additional_File2_Positive_Controls.txt",
+Gene_Positive_Controls <- read.table("Positive_Controls.txt",
                                        header = TRUE)
 dim(Gene_Positive_Controls)
 ## [1] 675 2
@@ -230,7 +230,7 @@ plotPCA(g_uq, labels = FALSE, col = colLib, cex = 1.5, cex.axis = 1.3, cex.lab =
         xlim = c(-0.75, 0.75), ylim = c(-0.75, 0.75), pch = rep(c(19, 17), times = c(5, 5)))
 
 # Read the negative controls, as they will be used with RUVs:
-Gene_Negative_Controls <- read.table("Final_Negative_Controls_v25.txt", header = TRUE)
+Gene_Negative_Controls <- read.table("Negative_Controls.txt", header = TRUE)
 dim(Gene_Negative_Controls)
 # [1] 4039    2
 
@@ -354,7 +354,7 @@ Positive_Color <- brewer.pal(9, "Set1")[1] # Positive controls
 
 # Read the list of genes to be highlighted (Arc, Bdnf, Cirbp, Eif4ebp1, Fos, Homer1, 
 # Mef2c, Hdac7, Hspa5, Wnt9a, Sst)
-Highlight_Genes <- readxl::read_excel("050123_Highlight_Genes_Subset.xlsx", col_names = FALSE)
+Highlight_Genes <- readxl::read_excel("Peixoto_Figure_2_Supplementary_Table_2.xlsx", sheet = 2, col_names = FALSE)
 
 Gene_Names <- as.matrix(Highlight_Genes)
 dim(Gene_Names)
