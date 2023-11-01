@@ -516,7 +516,7 @@ data.class(counts_gy)
 For gene level analysis, we can use a set of positive controls from [@gerstner2016] to assess the performance of our pipeline downstream. Load the positive controls here:
 
 ```{r}
-Gene_Positive_Controls <- read.table("Additional_File2_Positive_Controls.txt", header = TRUE)
+Gene_Positive_Controls <- read.table("Positive_Controls.txt", header = TRUE)
 dim(Gene_Positive_Controls)
 ```
 
@@ -558,7 +558,7 @@ plotPCA(g_uq, labels = FALSE, col = colLib, cex = 1.5, cex.axis = 1.3, cex.lab =
 *RUVs* uses technical replicates or negative controls samples. We do have negative control genes from [@gerstner2016] for differential gene analysis, and will load them here. For additional information regarding *RUVs*, see [@risso2014].
 
 ```{r}
-Gene_Negative_Controls <- read.table("Final_Negative_Controls_v25.txt", header = TRUE)
+Gene_Negative_Controls <- read.table("Negative_Controls.txt", header = TRUE)
 dim(Gene_Negative_Controls)
 ```
 
