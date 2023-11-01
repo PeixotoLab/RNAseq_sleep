@@ -387,3 +387,16 @@ To reproduce the figures in the analysis, please navigate to `02_analysis_snrnas
 - Figure 2B and C, Figure 2 Supplementary Table 1 were generated with `4_DifferentialExpressionAnalysis.R`
 - Figure 4A was generated with `5_UpSetPlot.R`
 
+### Functional Enrichment Analysis
+
+Functional enrichment analysis was carried out using using the Database for Annotation, Visualization and Integrated Discovery v2021 (DAVID, Sherman et al., 2022[https://pubmed.ncbi.nlm.nih.gov/35325185/] and Huang et al., 2009[https://pubmed.ncbi.nlm.nih.gov/19131956/]). The following annotation categories were used: Uniprot Biological Process, Uniprot Molecular Function [https://www.uniprot.org] and KEGG Pathways [https://www.genome.jp/kegg/pathway.html]. Enrichment was relative to expressed genes. A p-value threshold (EASE Score) < 0.05 was used. A similarity threshold of 0.20 was used to allow for inclusive clustering. Both clustered and unclustered terms were visualized with a bubble plot using the ggplot function from the ggplot2 (v. 3.4.2) package.
+
+To reproduce the analysis, please navigate to the `03_Functional_Enrichment_Analysis` folder where differentially expressed gene lists and backgrounds can be found.
+
+Also in this folder, you will find code to reproduce the bubble plots generated for the paper.
+
+
+
+
+
+
