@@ -387,8 +387,8 @@ Highlight_Color <- "dodgerblue"
 Read the list of genes that we have chosen to highlight here.
 
 ```{r}
-Highlight_Genes <- readxl::read_excel("050123_Highlight_Genes_Subset.xlsx", 
-                                      col_names = FALSE)
+Highlight_Genes <- readxl::read_excel("Peixoto_Figure_2_Supplementary_Table_2.xlsx", sheet = 2, col_names = FALSE)
+
 Highlight_Genes
 ```
 
