@@ -204,7 +204,7 @@ This script quantifies reads at the transcript level, which can be summarized la
 #### Create `SummarizedExperiment` object
 
 Here we import the `quant.sf` files produced by `salmon quant` into R/Bioconductor using the `tximeta` package with the `01_quantification/bulk/run-tximeta-for-fishpond.R` script. 
-We save the `SummarizedExperiment` object at the transcript level (and gene level) as a `.RDS` file: `data/se_mouse_sleep_complete.rds` (and `data/gse_mouse_sleep_complete.rds`)
+We save the `SummarizedExperiment` object at the transcript level (and gene level) as a `.RDS` file: `data/transcript-summarized-experiment.rds` (and `data/gene-summarized-experiment.rds`)
 
 - Helpful vignette: https://bioconductor.org/packages/devel/bioc/vignettes/tximeta/inst/doc/tximeta.html
 
