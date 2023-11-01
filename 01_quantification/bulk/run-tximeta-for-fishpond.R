@@ -1,5 +1,5 @@
 # Katie Ford
-# November 2022 (Reorganized folder on Dropbox and needed to run again. I used a new Mac and updated the packages as seen below)
+# November 2022
 
 # I adapted this code from Stephanie Hicks
 # Use tximeta to read in quant files (output from salmon quant) into SummarizedExperiment files
