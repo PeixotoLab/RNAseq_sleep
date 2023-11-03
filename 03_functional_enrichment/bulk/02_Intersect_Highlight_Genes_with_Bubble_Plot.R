@@ -17,7 +17,7 @@ length(Highlight_Genes)
 # [1] 7
 
 # Read file containing the output of DAVID
-DTU_Clusters <- readxl::read_xlsx("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta/080223_DAVID_DTU/080223_Supplementary_Table_4.xlsx")
+DTU_Clusters <- readxl::read_xlsx("~/Dropbox/Sleep_RNAseq_Splicing/BulkRNAseq_SD/Final_Tximeta/080223_DAVID_DTU/Peixoto_Figure_7_Supplementary_Table_1.xlsx")
 head(DTU_Clusters)
 # A tibble: 25 × 14
 # `Annotation Cluster 1`   Enrichment Score: 3.020…¹ ...3  ...4  ...5  ...6  ...7  ...8  ...9 
