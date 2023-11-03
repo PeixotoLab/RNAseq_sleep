@@ -391,9 +391,17 @@ To reproduce the figures in the analysis, please navigate to `02_analysis_snrnas
 
 Functional enrichment analysis was carried out using using the Database for Annotation, Visualization and Integrated Discovery v2021 (DAVID, [Sherman et al., 2022](https://pubmed.ncbi.nlm.nih.gov/35325185/) and [Huang et al., 2009](https://pubmed.ncbi.nlm.nih.gov/19131956/)). The following annotation categories were used: [Uniprot Biological Process, Uniprot Molecular Function](https://www.uniprot.org) and [KEGG Pathways](https://www.genome.jp/kegg/pathway.html). Enrichment was relative to expressed genes. A p-value threshold (EASE Score) < 0.05 was used. A similarity threshold of 0.20 was used to allow for inclusive clustering. Both clustered and unclustered terms were visualized with a bubble plot using the ggplot function from the ggplot2 (v. 3.4.2) package.
 
-To reproduce the analysis, please navigate to the `03_Functional_Enrichment_Analysis` folder where differentially expressed gene lists and backgrounds can be found.
+To reproduce the analysis, please navigate to the `03_functional_enrichment` folder where differentially expressed gene lists and backgrounds can be found.
 
-Also in this folder, you will find code to reproduce the bubble plots generated for the paper.
+Also in this folder, you will find code to reproduce the bubble plots generated for the paper, separated by `bulk` and `snrnaseq`.
+
+After generating bubble plots, the Ensembl gene IDs from the DAVID output were extracted and annotating using perl. To reproduce the annotation, please navigate to the `annotation` subdirectory of the `bulk` folder. To use perl, navigate to your working directory on the command line and type: `perl Annotate_Lists_DAVID_Output.pl`.
+
+Following annotation, the gene names were transposed and added to the DAVID output text files to create the following supplementary data files:
+
+- Peixoto_Figure_3_Supplementary_Table_2.xlsx
+- Peixoto_Figure_4_Supplementary_Table_2.xlsx
+- Peixoto_Figure_7_Supplementary_Table_1.xlsx
 
 
 
