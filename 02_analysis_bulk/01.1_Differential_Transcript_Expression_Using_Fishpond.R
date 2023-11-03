@@ -419,7 +419,7 @@ dim(y_filter)
 # [1] 15525     4
 
 # write.table(y_filter, 
-#            file = "102722_Differential_Transcript_Expression_Significant_k=4.txt")
+#            file = "DTE_Significant_k=4.txt")
 
 # sink('072023_Fishpond_SessionInfo.txt')
 # sessionInfo()
