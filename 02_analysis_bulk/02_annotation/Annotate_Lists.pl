@@ -1,8 +1,8 @@
 use strict;
 
 my $Annotations= "BioMart_Ensembl100_Gencodev25_GRCm38p6.txt";
-my $GeneList= "102522_Differential_Gene_Expression_Significant_k=4.txt";
-my $outfile="102522_Annotated_Differential_Gene_Expression_Significant_k=4.txt";
+my $GeneList= "DGE_Significant_k=4.txt";
+my $outfile="DGE_Significant_k=4_Annotated.txt";
 
 
 open IN,"<$Annotations" or die $!;
