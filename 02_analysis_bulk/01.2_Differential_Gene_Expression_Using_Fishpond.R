@@ -405,7 +405,7 @@ gy <- dplyr::filter(gy, qvalue < .05)
 dim(gy)
 # [1] 8505    4
 
-# write.table(gy, file = "110322_Differential_Gene_Expression_Significant_k=4.txt")
+# write.table(gy, file = "DGE_Significant_k=4.txt")
 
 # sink('072023_Fishpond_SessionInfo.txt')
 # sessionInfo()
