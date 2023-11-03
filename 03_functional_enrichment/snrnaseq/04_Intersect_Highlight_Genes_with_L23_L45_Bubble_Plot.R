@@ -1,3 +1,7 @@
+#### Intersect Highlight Genes w/ DAVID Output ####
+
+#### Load packages and set the working directory ####
+library(readxl) # Version 1.4.2
 
 # Set the working directory
 setwd("~/Dropbox/Sleep_RNAseq_Splicing/Single_nuclear_RNAseq_SD/KF_Unique_Functional_Annotation/DAVID_Output")
