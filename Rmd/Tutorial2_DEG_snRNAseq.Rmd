@@ -25,16 +25,15 @@ options(width=65)
 ```
 
 # Preliminaries
+
 ## Data Availability
-Pseudo-bulk of single-nuclear RNA-seq data is available [here]().
 
-The list of negative control genes is available [here](). These genes are not influenced by the biological effect
-of interest. The list of positive control genes is available [here](). These genes are known to be differentially
-expressed with respect to the biological effect of interest.
+Raw sequencing data for this analysis is stored in GEO under accession number [GSE211088](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE211088). 
 
-The code used in this analysis has been deposited into Github, and can be available [here]().
+The code used in this analysis has been deposited into Github, and can be available [here](https://github.com/PeixotoLab/RNAseq_sleep/tree/main/02_analysis_snrnaseq).
 
 ## Bioconductor packages
+
 The differential expression (DE) analysis was carried out with `r Biocpkg("edgeR")`. Remove Unwanted Variation (RUV) normalization is implemented in the `r Biocpkg("RUVSeq")` package. To normalize raw data before RUV and to visualize the Principal Component Analysis (PCA) of UQ + RUV normalization, we used the `r Biocpkg("EDASeq")` package. Some plots were visualized using the [*ggplot2*](https://cran.r-project.org/web/packages/ggplot2/index.html) package. The Upset plot was visualized using the [*UpSetR*](https://cran.r-project.org/web/packages/UpSetR/index.html) and the [*ComplexUpset*](https://cran.r-project.org/web/packages/ComplexUpset/index.html) packages.
 
 ```{r preliminaries}
@@ -51,9 +50,11 @@ library(patchwork)
 ```
 
 # Differential expression analysis
+
 For each neuronal cell-type with more than 500 cells, the differential gene expression analysis was carried out with a negative binomial generalized linear model (GLM) on pseudo-bulk samples.
 
 ## Load pseudo-bulk
+
 ```{r}
 # Load pseudo-bulk data
 pb <- readRDS("snrna_pb.rds")
@@ -65,6 +66,7 @@ pb_ct <- lapply(unique(pb$azimuth_labels), function(ct) pb[, pb$azimuth_labels =
 ```
 
 ## UQ + RUV
+
 Then, we normalized the raw counts with the upper-quartile method, using the *betweenLaneNormalization* function of the EDASeq package with option *which="upper"*.
 To account for latent confounders, we computed a factor of unwanted variation on the normalized data, using the *RUVs* function of the RUVSeq package with k=2 and using as negative control genes a list of genes previously characterized as non-differential in sleep deprivation in a large [microarray meta-analysis](https://bmcgenomics.biomedcentral.com/articles/10.1186/s12864-016-3065-8). Specifically, 10% of negative control genes were randomly selected to be used for evaluation and  the remaining control genes were used to fit RUV normalization. 
 
@@ -97,6 +99,7 @@ for (i in seq_along(unique(pb$azimuth_labels))) {
 ```
 
 ## Differentially expressed genes identification
+
 We then used the Bioconductor edgeR package to perform differential expression after filtering the lowly expressed genes with the *filterByExpr* function (with default parameters). The factor of unwanted variation was added in the design matrix. The differential gene expression analysis was computed with the function glmLRT by specifying “SD-HC” (Sleep Deprived vs Home Cage Control) as contrast and offset term equal to zero, since normalization was already carried out by the RUV factor.
 
 ```{r}
@@ -135,6 +138,7 @@ names(df_uq_ruv2) <- unique(pb$azimuth_labels)
 ```
 
 ### Results
+
 We used the Benjamini-Hochberg procedure to control for the false discovery rate (FDR), i.e., we considered as differentially expressed those genes that had an adjusted p-value less than 5%.
 
 ```{r}
@@ -155,6 +159,7 @@ n_de_posctrl <- lapply(df_degs, function(u) length(intersect(rownames(u), posctr
 ```
 
 #### Scatter plot
+
 We visualized the scatter plot of the logarithm of the number of nuclei and the logarithm of the number of differential genes expressed.
 ```{r}
 label_color <- c("Astro", "Car3", "Endo", "L2/3 IT CTX", "L4/5 IT CTX", "L5 IT CTX", "L5 PT CTX", "L5/6 NP CTX", "L6 CT CTX", "L6 IT CTX" , "L6b CTX", "Lamp5", "Micro-PVM", "Oligo", "Pvalb",    "SMC-Peri", "Sncg", "Sst", "Sst Chodl", "Vip", "VLMC")
@@ -191,6 +196,7 @@ ggplot(tab, aes(x = log(nuclei), y = log(DEG))) +
 ```
 
 #### PCA
+
 Then, we visualized the PCA for each cell-type.
 
 ```{r}
@@ -222,6 +228,7 @@ for (i in seq_along(label)) {
 ```
 
 #### Volcano plot
+
 We visualized the volcano plot and histogram for each cell-type.
 
 ```{r, fig.width=10, fig.height=10}
@@ -341,6 +348,7 @@ p12 <- ggplot(data = df_uq_ruv2[[11]], aes(x = logFC, y = -log10(PValue), col = 
 ```
 
 #### Histogram of p-value distribution
+
 ```{r, fig.width=10, fig.height=15}
 # Histogram of p-value distribution
 label <- unique(pb$azimuth_labels)
@@ -352,6 +360,7 @@ for (i in seq_along(label)) {
 ```
 
 # Upset plot
+
 For Glutamatergic and GABAergic neurons, we used the *upset* function of the UpSetR package to identify the list of unique differentially expression genes for each cell-type.
 
 ```{r, fig.width=15, fig.height=10}
@@ -431,6 +440,7 @@ upset(df.edgeRList, colnames(df.edgeRList)[1:10],
 ```
 
 ## Session Info
+
 ```{r}
 sessionInfo()
 ```
