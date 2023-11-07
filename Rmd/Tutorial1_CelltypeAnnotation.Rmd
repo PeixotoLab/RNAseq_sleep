@@ -25,12 +25,16 @@ options(width=65)
 ```
 
 # Preliminaries
+
 ## Data Availability
-Single-nuclear RNA-seq data are available [here]().
-The code used in this analysis has been deposited into Github, and can be available [here]().
+
+Raw sequencing data for this analysis is stored in GEO under accession number [GSE211088](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE211088). 
+
+The code used in this analysis has been deposited into Github, and can be available [here](https://github.com/PeixotoLab/RNAseq_sleep/tree/main/02_analysis_snrnaseq).
 
 ## Bioconductor packages
-To identify mitochondrial genes, we retrieve the chromosome location of each ensembl gene with the `r Biocpkg("EnsDb.Mmusculus.v79")`.  package. We used the Bioconductor `r Biocpkg("scuttle")`package to detect low quality and damaged droplets. The potential doublets removal was implemented in `r Biocpkg("scuttle")` package. For cell-type assignment reference dataset was made available at [*AllenInstituteBrainData*](https://github.com/drighelli/AllenInstituteBrainData). Cell annotation was computed using two methods: [*Azimuth*](https://github.com/satijalab/azimuth) and `r Biocpkg("SingleR")`. We used the `r Biocpkg("scuttle")` package to create pseudo-bulk. The visualization of the MDS plot was implemented in `r Biocpkg("muscat")` package.
+
+To identify mitochondrial genes, we retrieve the chromosome location of each Ensembl gene with the `r Biocpkg("EnsDb.Mmusculus.v79")`.  package. We used the Bioconductor `r Biocpkg("scuttle")`package to detect low quality and damaged droplets. The potential doublets removal was implemented in `r Biocpkg("scuttle")` package. For cell-type assignment reference dataset was made available at [*AllenInstituteBrainData*](https://github.com/drighelli/AllenInstituteBrainData). Cell annotation was computed using two methods: [*Azimuth*](https://github.com/satijalab/azimuth) and `r Biocpkg("SingleR")`. We used the `r Biocpkg("scuttle")` package to create pseudo-bulk. The visualization of the MDS plot was implemented in `r Biocpkg("muscat")` package.
 
 ```{r}
 library(SingleCellExperiment)
@@ -47,11 +51,15 @@ library(muscat)
 library(edgeR)
 library(AllenInstituteBrainData)
 library(dplyr)
+library(GEOquery)
 ```
 
 # Data pre-processing
+
 ## Data setting
+
 Load single-nuclear RNA-seq dataset. 
+
 ```{r}
 snrna_data <- readRDS("sce_mouse_sleep_snrnaseq_complete.rds")
 snrna_data
@@ -114,6 +122,7 @@ scelist <- list(sce[, sce$sample_id == "1HC"], sce[, sce$sample_id == "2SD"],
 ```
 
 ## Quality controls
+
 For each sample, we used the Bioconductor scuttle package to detect low quality and damaged droplets. Particularly, we computed per-cell quality-control metrics with the *perCellQCMetrics* function; these metrics include the sum of UMI counts, the number of detected genes, and the percentage of mitochondrial counts. 
 
 ```{r}
@@ -138,6 +147,7 @@ scelist_filt <- lapply(scelist_filt, function(x) logNormCounts(x))
 ```
 
 ## Doublets removal
+
 Lastly, for each sample, we removed potential doublets with the scDblFinder (v1.12.0) package, using the *computeDoubletDensity* function to calculate the scores and the *doubletThresholding* function to set the doublet scores threshold with the *griffiths* method.
 
 ```{r}
@@ -161,11 +171,13 @@ scelist_sgl
 ```
 
 # Cell-type annotation
+
 ## Reference dataset
+
 To identify cell types, we used the [Allen Whole Cortex & Hippocampus - 10x genomics (v2021)](https://www.sciencedirect.com/science/article/pii/S0092867421005018) as reference dataset . This dataset was imported by the *AllenInstituteBrainData* function of the AllenInstituteBrainData. We then selected the “Non-Neuronal”, “Glutamatergic” and “GABAergic” clusters coming from the Visual Cortex (VIS, VISl, VISm, VISp) to annotate our dataset. For computational issues, we selected a random subset of 100,000 cortical cells.
 Cell annotation was computed with an automatic and reference-based method: Azimuth.
 
-```{r}
+```{r, eval=FALSE}
 # Load reference dataset 
 reference <- AllenInstituteBrainData("Allen_Mouse_2021")
 rownames(reference) <- rowData(reference)$X
@@ -210,6 +222,7 @@ reference
 ```
 
 ## Cell-type annotation with Azimuth 
+
 For the Azimuth method, the reference data was converted into a Seurat object and into a Azimuth compatible object, using the *AzimuthReference* function of the Azimuth package. Then query samples were merged and were converted into a Seurat object. 
 
 ```{r, eval=FALSE}
@@ -246,6 +259,7 @@ saveRDS(object = reference_azimuth, file = file.path(ref_dir, "ref.Rds"))
 ```
 
 The query dataset was converted into a Seurat object.
+
 ```{r}
 # The six SingleCellExperiment were combined and converted into a Seurat object.
 counts <- cbind(counts(scelist_sgl[[1]]), counts(scelist_sgl[[2]]),
@@ -291,6 +305,7 @@ seurat_obj <- readRDS("snrna_seurat_annot.rds")
 ```
 
 ## Dimensional reduction visualization 
+
 To visualize the assigned labels in two dimensions, the UMAP embeddings were computed using the *DimPlot* function of the Seurat package, with option *reduction = “integrated_dr”*, where *“integrated_dr”* is the supervised principal component analysis obtained by the Azimuth method.
 
 ```{r}
@@ -310,7 +325,9 @@ umap_plot
 ```
 
 # Multidimensional Scaling (MDS)
+
 For the next analysis, cell-types with more than 500 cells were selected.
+
 ```{r}
 # Add the Azimuth labels into the SingleCellExperiment object
 sce_obj$azimuth_labels <- seurat_obj$predicted.subclass_label
@@ -360,7 +377,7 @@ prep_sce <- prepSCE(snrna_pb[, snrna_pb$class == "Glutamatergic"],
 pb <-  aggregateData(prep_sce, assay = "logcounts",
                      by = c("cluster_id", "sample_id"))
 
-pbMDS(pb) + scale_color_manual(values = neuronal_color) +
+pbMDS(pb) + scale_color_manual(values = neuronal_color[1:8]) +
   labs(col = "Cell-types", shape = "Condition") +
   theme(axis.text = element_text(size = 7), axis.title = element_text(size = 7))
 
@@ -371,7 +388,7 @@ prep_sce <- prepSCE(snrna_pb[, snrna_pb$class == "GABAergic"],
 pb <-  aggregateData(prep_sce, assay = "logcounts",
                      by = c("cluster_id", "sample_id"))
 
-pbMDS(pb) + scale_color_manual(values = neuronal_color) +
+pbMDS(pb) + scale_color_manual(values = neuronal_color[9:11]) +
   labs(col = "Cell-types", shape = "Condition") +
   theme(axis.text = element_text(size = 7), axis.title = element_text(size = 7))
 
@@ -414,6 +431,7 @@ pbMDS(pb) + scale_color_manual(values = neuronal_color) +
 ```
 
 ## Session Info
-```{r}
+
+```{r, tidy=FALSE}
 sessionInfo()
 ```
