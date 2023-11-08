@@ -1,6 +1,6 @@
-# RNA-seq (bulk and snRNA) of sleep deprivation in wildtype and Shank3 mutant mice
+# RNA-seq (bulk and snRNA) of sleep deprivation in wildtype mice
 
-This repository contains the code and analyses for the analysis of bulk RNA-seq and snRNA-seq analysis of sleep deprivation in wildtype and Shank3 mutant mice
+This repository contains the code and analyses for the analysis of bulk RNA-seq and snRNA-seq analysis of sleep deprivation in wildtype C57BL/J6 mice.
 
 ## Authors
 
@@ -13,7 +13,7 @@ This repository contains the code and analyses for the analysis of bulk RNA-seq 
 
 ### bulk RNA-seq
 
-- 2020-11-28: The FASTQ files for the WT and Shank 3 mutant bulk RNA-seq samples are available on SRA here: https://www.ncbi.nlm.nih.gov/Traces/study/?acc=PRJNA453921
+- 2020-11-28: The FASTQ files for the WT bulk RNA-seq samples are available on SRA here: https://www.ncbi.nlm.nih.gov/Traces/study/?acc=PRJNA453921
 - 2020-12-04: Downloaded all previous fastq files from Dario's server, but these also include nap mice. I noticed the ordering is slightly different and not sure what this means. 
 
 Used the following code: 
