@@ -9,7 +9,7 @@
 ## only at the gene level?
 
 ## Additionally, if we apply a log2FC filter, what is the recovery of positive and negative
-## controls like? (Extended Data Figure 10)
+## controls like? (Extended Data Figure 9)
 
 # R Version 4.2.2
 
