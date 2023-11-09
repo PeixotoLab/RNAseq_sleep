@@ -1,6 +1,6 @@
 # RNA-seq (bulk and snRNA) of sleep deprivation in wildtype mice
 
-This repository contains the code and analyses for the analysis of bulk RNA-seq and snRNA-seq analysis of sleep deprivation in wildtype C57BL/J6 mice.
+This repository contains the code and analyses for the analysis of bulk RNA-seq and snRNA-seq analysis of sleep deprivation in wildtype C57BL6/J mice.
 
 ## Authors
 
