@@ -42,7 +42,7 @@ First, we manually downloaded the `SraRunInfo.csv` file:
 
 This file has already been downloaded for you and is available at `01_quantification/bulk/data/SraRunInfo.csv`. 
 
-Using this file, you can download and create GEO metadata with the shell script `01_quantification/bulk/download-geo-data.sh`.
+Using this file, you can download and create GEO metadata with the shell script `01_quantification/bulk/download-geo-data.R`.
 
 #### Download SRA files
 
