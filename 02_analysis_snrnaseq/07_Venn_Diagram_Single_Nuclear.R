@@ -1,10 +1,6 @@
 # Venn Diagram intersecting Glutamatergic and GABAergic lists
 
-## We are waiting to hear back if L5/6 NP CTX will be incuded
-## For now, I am keeping it
-
 ## I am going to compare the intersections we get when applying a 0.05 and 0.01 FDR threshold
-## If we decide to include 0.10, I will need the full list from Elena
 
 #### Set working directory and load packages ####
 setwd("~/Dropbox/Sleep_RNAseq_Splicing/Single_nuclear_RNAseq_SD/iScienceRevisionFigures")
