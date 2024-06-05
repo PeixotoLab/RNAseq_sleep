@@ -12,6 +12,8 @@ library(EnsDb.Mmusculus.v79)
 library(scuttle)
 library(scran)
 library(scDblFinder)
+library(FastCAR)
+library(qlcMatrix)
 
 # Load single-nuclear RNA-seq snrna_dataset ####
 snrna_data <- readRDS("sce_mouse_sleep_snrnaseq_complete.rds")
