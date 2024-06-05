@@ -88,6 +88,24 @@ for (i in seq_along(scelist)) {
   scelist_filt[[i]] <- scelist[[i]][, !discard]
 }
 
+# Quality control metrics plots
+qc_sce <- do.call(cbind, scelist)
+qc_sce$sample_id <- factor(qc_sce$sample_id)
+
+p <- gridExtra::grid.arrange(
+  plotColData(qc_sce, x = "sample_id", y = "sum", colour_by = "discard",
+              other_fields = "condition") +
+     scale_y_log10() + ggtitle("Total count"),
+  plotColData(qc_sce, x = "sample_id", y = "detected", colour_by = "discard", 
+               other_fields = "condition") +  
+     scale_y_log10() + ggtitle("Detected features"),
+   plotColData(qc_sce, x = "sample_id", y = "subsets_Mito_percent", 
+               colour_by = "discard", other_fields = "condition") + 
+    ggtitle("Mito percent"),
+  ncol=1
+)
+ggsave(p, file = "diagnostic_qc_cond.pdf", width = 21, height = 10, units = "cm")
+
 # Log-normalized counts
 scelist_filt <- lapply(scelist_filt, function(x) logNormCounts(x))
 
