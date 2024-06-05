@@ -146,6 +146,13 @@ p1 <- p1 + theme(axis.text=element_text(size=7), axis.title=element_text(size=7)
 ggsave("Peixoto_Figure4_part1.jpg",  width = 10, height = 10, units = "cm")
 ggsave("Peixoto_Figure4_part1.pdf",  width = 10, height = 10, units = "cm")
 
+p <- DimPlot(seurat_obj, reduction = "UMAP", group.by = "condition") +
+  labs(x = "UMAP1", y = "UMAP2", color = 'Condition') + ggtitle("") + 
+  scale_color_manual(values = c(HC = "lightblue", SD = "orange")) +
+  theme(axis.text=element_text(size = 7), axis.title=element_text(size = 7),
+        legend.text = element_text(size = 7), legend.title = element_text(size = 7))
+ggsave("snrna_umap_condition.pdf",  width = 10, height = 10, units = "cm")
+
 # Save objects ####
 # The SingleCellExperiment object with Azimuth labels was saved
 sce_obj$azimuth_labels <- seurat_obj$predicted.subclass_label
