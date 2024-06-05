@@ -126,5 +126,20 @@ for (i in seq_along(scelist_filt)) {
 scelist_sgl <- lapply(scelist_filt, function(u) u[, !u$dbl_calls == "doublet"])
 names(scelist_sgl) <- levels(factor(sce$sample_id))
 
+raw_matrix <- counts(snrna_data)
+filter_matrix <- do.call(cbind, scelist)
+filter_matrix <- counts(filter_matrix)
+ambProfile <- describe.ambient.RNA.sequence(fullCellMatrix = raw_matrix, 
+                                           start = 10, 
+                                           stop = 500, 
+                                           by = 10, 
+                                           contaminationChanceCutoff = 0.05)
+
+ambientProfile <- determine.background.to.remove(fullCellMatrix = raw_matrix,  
+                                                emptyDropletCutoff = recommend.empty.cutoff(ambProfile), 
+                                                contaminationChanceCutoff = 0.05)
+
+cellMatrix <- remove.background(filter_matrix, ambientProfile)
+
 # Save the new SCE object in .rds file
 saveRDS(scelist_sgl, file = "snrna_scelist_sgl.rds")
