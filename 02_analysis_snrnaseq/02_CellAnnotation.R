@@ -153,6 +153,46 @@ p <- DimPlot(seurat_obj, reduction = "UMAP", group.by = "condition") +
         legend.text = element_text(size = 7), legend.title = element_text(size = 7))
 ggsave("snrna_umap_condition.pdf",  width = 10, height = 10, units = "cm")
 
+# Heatmap of expression average of Allen markers ####
+allen_markers <- c("Gad1", "Gad2", "Slc32a1", "Slc17a7", "Lamp5", "Ndnf", "Sncg", "Vip", "Sst", "Chodl", "Pvalb",
+                   "Cux2", "Rorb", "Fezf2", "Sulf1", "Sla2", "Foxp2", "Nxph4", "Aqp4", "Mbp", "Cldn5", "Ctss", "C1qa")
+
+ensembl_biomaRt <- useEnsembl(biomart = "genes", dataset = "mmusculus_gene_ensembl")
+
+gene_id <- getBM(attributes=c('ensembl_gene_id','external_gene_name'), 
+                 filters = 'external_gene_name', values = allen_markers, mart = ensembl_biomaRt)
+gene_id <- gene_id[order(gene_id$ensembl_gene_id), ]
+
+markers_sce <- sce_obj[rownames(sce_obj) %in% gene_id$ensembl_gene_id, ]
+markers_sce <- markers_sce[order(rownames(markers_sce)), ]
+rownames(markers_sce) <- gene_id$external_gene_name
+
+avg_markers <- matrix(nrow = length(rownames(markers_sce)),
+                      ncol = length(unique(markers_sce$azimuth_labels)))
+for (j in seq_along(unique(markers_sce$azimuth_labels))) {
+  avg_markers[, j] <- rowMeans(logcounts(markers_sce[, markers_sce$azimuth_labels == unique(markers_sce$azimuth_labels)[j]]))
+}
+
+rownames(avg_markers) <- rownames(markers_sce)
+colnames(avg_markers) <- unique(markers_sce$azimuth_labels)
+
+my_order <- c("Pvalb", "Sst", "Vip", "L2/3 IT CTX", "L4/5 IT CTX", "L5 IT CTX", 
+              "L5 PT CTX", "L5/6 NP CTX", "L6 CT CTX", "L6 IT CTX", "L6b CTX", "Oligo", 
+              "Astro", "Micro-PVM", "SMC-Peri")
+
+avg_markers <- avg_markers[order(match(rownames(avg_markers), allen_markers)),]
+avg_markers <- avg_markers[, order(match(colnames(avg_markers), my_order))]
+
+p <- pheatmap(avg_markers, scale="row",
+              cluster_rows = FALSE,
+              cluster_cols = FALSE)
+ggsave(p, file = "snrna_heatmap_avg_allen_scaled.pdf", width = 10, height = 10, units = "cm")
+
+p <- pheatmap(avg_markers,  
+              cluster_rows = FALSE,
+              cluster_cols = FALSE)
+ggsave(p, file = "snrna_heatmap_avg_allen.pdf", width = 10, height = 10, units = "cm")
+
 # Save objects ####
 # The SingleCellExperiment object with Azimuth labels was saved
 sce_obj$azimuth_labels <- seurat_obj$predicted.subclass_label
